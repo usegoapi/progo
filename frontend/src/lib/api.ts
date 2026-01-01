@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// URL padrão da API
-let apiBaseUrl = 'https://goapi-go-api.pdjn0h.easypanel.host';
+// URL padrão da API - será sobrescrita pelo /api/config em runtime
+let apiBaseUrl = '/api/proxy';
 
 // Buscar URL da API do servidor (em runtime)
 if (typeof window !== 'undefined') {
