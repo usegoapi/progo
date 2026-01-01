@@ -1,0 +1,34 @@
+# =========================================
+# GO-API Frontend - Dockerfile (Local)
+# =========================================
+FROM node:18-slim
+
+# Instalar curl para healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copiar package.json
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm install
+
+# Copiar código fonte
+COPY . .
+
+# Build da aplicação
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+
+RUN npm run build
+
+# Configurações de produção
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+EXPOSE 3000
+
+# Iniciar aplicação
+CMD ["npm", "start"]

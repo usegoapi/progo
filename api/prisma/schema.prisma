@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  
+  instances    Instance[]
+  webhooks     Webhook[]
+  integrations Integration[]
+}
+
+model Instance {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  status      String   @default("DISCONNECTED")
+  sessionData Json?
+  createdAt   DateTime @default(now())
+  
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  instanceId String
+  from       String
+  to         String
+  type       String
+  content    Json
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+}
+
+model Webhook {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  events    String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Integration {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  config    Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
