@@ -130,22 +130,30 @@ export class MessagesService {
     const to = this.formatPhone(dto.to);
     
     try {
-      // Tenta baixar o áudio primeiro
+      // Baixar o áudio e enviar como buffer com mimetype correto para PTT
       const audioBuffer = await this.downloadMedia(dto.audioUrl);
-      const mimetype = this.getMimeType(dto.audioUrl, 'audio');
+      
+      // Para PTT (voice note), o WhatsApp requer audio/ogg com codec opus
+      // Mas também aceita audio/mp4 se o arquivo for compatível
+      const mimetype = dto.ptt !== false ? 'audio/ogg; codecs=opus' : this.getMimeType(dto.audioUrl, 'audio');
       
       await socket.sendMessage(to, { 
         audio: audioBuffer, 
-        mimetype, 
-        ptt: dto.ptt ?? true 
+        mimetype,
+        ptt: dto.ptt !== false, // default true
       });
     } catch (downloadError) {
       this.logger.warn(`Audio download failed, trying direct URL: ${downloadError.message}`);
       try {
-        await socket.sendMessage(to, { audio: { url: dto.audioUrl }, mimetype: 'audio/mp4', ptt: dto.ptt ?? true });
+        // Fallback: enviar por URL (pode não funcionar em todos os dispositivos)
+        await socket.sendMessage(to, { 
+          audio: { url: dto.audioUrl }, 
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: dto.ptt !== false,
+        });
       } catch (urlError) {
         this.logger.error(`Failed to send audio: ${urlError.message}`);
-        throw new BadRequestException(`Não foi possível enviar o áudio. Verifique se a URL é acessível: ${dto.audioUrl}`);
+        throw new BadRequestException(`Não foi possível enviar o áudio. Verifique se a URL é acessível e o formato é compatível (mp3, ogg, m4a): ${dto.audioUrl}`);
       }
     }
     
@@ -207,9 +215,27 @@ export class MessagesService {
     if (!socket) throw new BadRequestException('Instância não conectada');
 
     const to = this.formatPhone(dto.to);
-    const pixText = `${dto.title || 'Pagamento PIX'}\n\n${dto.text}\n\n💰 Valor: R$ ${dto.amount.toFixed(2)}\n👤 ${dto.merchantName}${dto.productName ? `\n📦 ${dto.productName}` : ''}\n\n📋 Chave PIX: ${dto.pixKey}\n\n${dto.footer || 'GO-API'}`;
     
-    await socket.sendMessage(to, { text: pixText });
+    // Texto formatado do PIX
+    const pixText = `💰 *${dto.title || 'Pagamento PIX'}*\n\n${dto.text}\n\n📦 ${dto.productName || 'Produto'}\n💵 Valor: R$ ${dto.amount.toFixed(2)}\n👤 ${dto.merchantName}`;
+    
+    // Enviar como mensagem interativa com botão de copiar
+    await socket.sendMessage(to, {
+      text: pixText,
+      footer: dto.footer || 'GO-API',
+      title: '',
+      interactiveButtons: [
+        {
+          name: 'cta_copy',
+          buttonParamsJson: JSON.stringify({
+            fix: true,
+            display_text: '📋 COPIAR CHAVE PIX',
+            copy_code: dto.pixKey,
+          }),
+        },
+      ],
+    });
+    
     return this.saveMessage(dto.instanceId, dto.to, 'PIX', dto);
   }
 
