@@ -5,11 +5,10 @@ RUN apk add --no-cache curl git python3 make g++ openssl
 WORKDIR /app
 
 # =============================================
-# BAILEYS - Copiar apenas arquivos essenciais
+# BAILEYS - Copiar apenas arquivos pré-compilados
 # =============================================
 RUN mkdir -p ./baileys/lib ./baileys/WAProto
 
-# Copiar arquivos do Baileys
 COPY baileys/engine-requirements.js ./baileys/
 COPY baileys/lib/ ./baileys/lib/
 COPY baileys/WAProto/ ./baileys/WAProto/
@@ -20,14 +19,9 @@ RUN cat > ./baileys/package.json << 'EOF'
   "name": "baileys",
   "type": "module",
   "version": "7.0.0-rc.9",
-  "description": "A WebSockets library for interacting with WhatsApp Web",
-  "license": "MIT",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "files": ["lib/**/*", "WAProto/**/*", "engine-requirements.js"],
-  "scripts": {
-    "preinstall": "node ./engine-requirements.js"
-  },
+  "scripts": {},
   "dependencies": {
     "@cacheable/node-cache": "^1.4.0",
     "@hapi/boom": "^9.1.3",
@@ -42,47 +36,45 @@ RUN cat > ./baileys/package.json << 'EOF'
     "ws": "^8.13.0"
   },
   "peerDependencies": {
-    "audio-decode": "^2.1.3",
     "jimp": "^1.6.0",
     "link-preview-js": "^3.0.0",
     "sharp": "*"
   },
   "peerDependenciesMeta": {
-    "audio-decode": { "optional": true },
     "jimp": { "optional": true },
     "link-preview-js": { "optional": true }
-  },
-  "engines": { "node": ">=20.0.0" }
+  }
 }
 EOF
 
 # =============================================
-# API - Configuração
+# API - Instalar dependências
 # =============================================
 COPY api/package*.json ./
 
-# Fix baileys path for Docker context
 RUN sed -i 's|"baileys": "file:../baileys"|"baileys": "file:./baileys"|g' package.json
 
-# Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Install NestJS CLI globally for build
-RUN npm install -g @nestjs/cli
-
-# Copy prisma schema and generate client
+# =============================================
+# PRISMA - Gerar cliente
+# =============================================
 COPY api/prisma/ ./prisma/
 RUN npx prisma generate
 
-# Copy API source code
+# =============================================
+# BUILD - Compilar TypeScript
+# =============================================
 COPY api/src/ ./src/
 COPY api/nest-cli.json ./
 COPY api/tsconfig.json ./
 
-# Build the application
-RUN npm run build && ls -la dist/
+# Build usando npx diretamente
+RUN npx nest build
+
+# Verificar se o build foi criado
+RUN ls -la && ls -la dist/ && test -f dist/main.js
 
 EXPOSE 3001
 
-# Run migrations and start
-CMD sh -c "npx prisma migrate deploy && npm run start:prod"
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
