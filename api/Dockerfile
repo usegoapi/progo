@@ -67,6 +67,9 @@ RUN sed -i 's|"baileys": "file:../baileys"|"baileys": "file:./baileys"|g' packag
 # Install dependencies
 RUN npm install --legacy-peer-deps
 
+# Install NestJS CLI globally for build
+RUN npm install -g @nestjs/cli
+
 # Copy prisma schema and generate client
 COPY api/prisma/ ./prisma/
 RUN npx prisma generate
@@ -77,7 +80,7 @@ COPY api/nest-cli.json ./
 COPY api/tsconfig.json ./
 
 # Build the application
-RUN npm run build
+RUN npm run build && ls -la dist/
 
 EXPOSE 3001
 
