@@ -72,9 +72,10 @@ COPY api/tsconfig.json ./
 # Build usando npx diretamente
 RUN npx nest build
 
-# Verificar se o build foi criado
-RUN ls -la && ls -la dist/ && test -f dist/main.js
+# Verificar se o build foi criado (pode estar em dist/ ou dist/src/)
+RUN ls -la dist/ && (test -f dist/main.js || test -f dist/src/main.js)
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# Usar o caminho correto do main.js
+CMD ["sh", "-c", "npx prisma migrate deploy && if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]
