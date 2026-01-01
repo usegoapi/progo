@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateInstanceDto {
   @IsString()
@@ -10,6 +11,32 @@ export class UpdateInstanceDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+}
+
+export class ProxySettingsDto {
+  @IsBoolean()
+  @IsOptional()
+  enabled?: boolean;
+
+  @IsString()
+  @IsOptional()
+  protocol?: string; // http | https | socks4 | socks5
+
+  @IsString()
+  @IsOptional()
+  host?: string;
+
+  @IsNumber()
+  @IsOptional()
+  port?: number;
+
+  @IsString()
+  @IsOptional()
+  username?: string;
+
+  @IsString()
+  @IsOptional()
+  password?: string;
 }
 
 export class UpdateSettingsDto {
@@ -36,4 +63,9 @@ export class UpdateSettingsDto {
   @IsBoolean()
   @IsOptional()
   readStatus?: boolean;
+
+  @ValidateNested()
+  @Type(() => ProxySettingsDto)
+  @IsOptional()
+  proxy?: ProxySettingsDto;
 }

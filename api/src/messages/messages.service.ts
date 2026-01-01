@@ -6,6 +6,8 @@ import {
   SendButtonsDto, SendCarouselDto, SendPixDto, SendListDto,
   SendPollDto, SendInteractiveButtonsDto,
 } from './dto/message.dto';
+import * as https from 'https';
+import * as http from 'http';
 
 @Injectable()
 export class MessagesService {
@@ -15,6 +17,60 @@ export class MessagesService {
     private prisma: PrismaService,
     private baileys: BaileysService,
   ) {}
+
+  // Helper para baixar mídia de URL com tratamento de erros
+  private async downloadMedia(url: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const protocol = url.startsWith('https') ? https : http;
+      const options = {
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      };
+
+      protocol.get(url, options, (response) => {
+        // Handle redirects
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          const redirectUrl = response.headers.location;
+          if (redirectUrl) {
+            this.downloadMedia(redirectUrl).then(resolve).catch(reject);
+            return;
+          }
+        }
+
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => resolve(Buffer.concat(chunks)));
+        response.on('error', reject);
+      }).on('error', reject).on('timeout', () => reject(new Error('Download timeout')));
+    });
+  }
+
+  // Detectar mimetype baseado na URL ou conteúdo
+  private getMimeType(url: string, type: 'image' | 'audio' | 'video' | 'document'): string {
+    const ext = url.split('.').pop()?.toLowerCase().split('?')[0];
+    const mimeTypes: Record<string, string> = {
+      // Images
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+      // Audio
+      mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac',
+      // Video
+      mp4: 'video/mp4', avi: 'video/avi', mkv: 'video/mkv', webm: 'video/webm',
+      // Documents
+      pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    
+    if (ext && mimeTypes[ext]) return mimeTypes[ext];
+    
+    const defaults = { image: 'image/jpeg', audio: 'audio/mp4', video: 'video/mp4', document: 'application/octet-stream' };
+    return defaults[type];
+  }
 
   private formatPhone(phone: string): string {
     let cleaned = phone.replace(/\D/g, '');
@@ -42,7 +98,28 @@ export class MessagesService {
     if (!socket) throw new BadRequestException('Instância não conectada');
 
     const to = this.formatPhone(dto.to);
-    await socket.sendMessage(to, { image: { url: dto.imageUrl }, caption: dto.caption });
+    
+    try {
+      // Tenta baixar a imagem primeiro para evitar erro de fetch
+      const imageBuffer = await this.downloadMedia(dto.imageUrl);
+      const mimetype = this.getMimeType(dto.imageUrl, 'image');
+      
+      await socket.sendMessage(to, { 
+        image: imageBuffer, 
+        mimetype,
+        caption: dto.caption 
+      });
+    } catch (downloadError) {
+      this.logger.warn(`Download failed, trying direct URL: ${downloadError.message}`);
+      // Fallback: tenta enviar direto pela URL
+      try {
+        await socket.sendMessage(to, { image: { url: dto.imageUrl }, caption: dto.caption });
+      } catch (urlError) {
+        this.logger.error(`Failed to send image: ${urlError.message}`);
+        throw new BadRequestException(`Não foi possível enviar a imagem. Verifique se a URL é acessível: ${dto.imageUrl}`);
+      }
+    }
+    
     return this.saveMessage(dto.instanceId, dto.to, 'IMAGE', { imageUrl: dto.imageUrl, caption: dto.caption });
   }
 
@@ -51,7 +128,27 @@ export class MessagesService {
     if (!socket) throw new BadRequestException('Instância não conectada');
 
     const to = this.formatPhone(dto.to);
-    await socket.sendMessage(to, { audio: { url: dto.audioUrl }, mimetype: 'audio/mp4', ptt: dto.ptt ?? true });
+    
+    try {
+      // Tenta baixar o áudio primeiro
+      const audioBuffer = await this.downloadMedia(dto.audioUrl);
+      const mimetype = this.getMimeType(dto.audioUrl, 'audio');
+      
+      await socket.sendMessage(to, { 
+        audio: audioBuffer, 
+        mimetype, 
+        ptt: dto.ptt ?? true 
+      });
+    } catch (downloadError) {
+      this.logger.warn(`Audio download failed, trying direct URL: ${downloadError.message}`);
+      try {
+        await socket.sendMessage(to, { audio: { url: dto.audioUrl }, mimetype: 'audio/mp4', ptt: dto.ptt ?? true });
+      } catch (urlError) {
+        this.logger.error(`Failed to send audio: ${urlError.message}`);
+        throw new BadRequestException(`Não foi possível enviar o áudio. Verifique se a URL é acessível: ${dto.audioUrl}`);
+      }
+    }
+    
     return this.saveMessage(dto.instanceId, dto.to, 'AUDIO', { audioUrl: dto.audioUrl });
   }
 

@@ -47,9 +47,14 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Se 401, pode ser token expirado
-    if (error.response?.status === 401) {
-      // Não remover token automaticamente, deixar o frontend decidir
+    // Se 401, limpar token e redirecionar para login
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('goapi_token');
+      localStorage.removeItem('goapi_user');
+      // Redirecionar para login se não estiver já lá
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

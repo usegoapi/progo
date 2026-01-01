@@ -9,6 +9,8 @@ import { Boom } from '@hapi/boom';
 import * as fs from 'fs';
 import * as path from 'path';
 import P from 'pino';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 interface SocketInstance {
   socket: any;
@@ -19,6 +21,15 @@ interface SocketInstance {
   name: string | null;
 }
 
+export interface ProxySettings {
+  enabled: boolean;
+  protocol: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
 export interface InstanceSettings {
   rejectCalls: boolean;
   ignoreGroups: boolean;
@@ -26,6 +37,7 @@ export interface InstanceSettings {
   readMessages: boolean;
   syncFullHistory: boolean;
   readStatus: boolean;
+  proxy: ProxySettings;
 }
 
 @Injectable()
@@ -68,6 +80,14 @@ export class BaileysService {
       readMessages: false,
       syncFullHistory: false,
       readStatus: false,
+      proxy: {
+        enabled: false,
+        protocol: 'http',
+        host: '',
+        port: 0,
+        username: '',
+        password: '',
+      },
     };
   }
 
@@ -130,6 +150,27 @@ export class BaileysService {
     this.statusCallbacks.set(instanceId, callback);
   }
 
+  // Criar agent de proxy baseado nas configurações
+  private createProxyAgent(proxy: ProxySettings): any {
+    if (!proxy.enabled || !proxy.host || !proxy.port) {
+      return undefined;
+    }
+
+    const auth = proxy.username && proxy.password 
+      ? `${proxy.username}:${proxy.password}@` 
+      : '';
+
+    const proxyUrl = `${proxy.protocol}://${auth}${proxy.host}:${proxy.port}`;
+
+    this.logger.log(`Usando proxy: ${proxy.protocol}://${proxy.host}:${proxy.port}`);
+
+    if (proxy.protocol === 'socks4' || proxy.protocol === 'socks5') {
+      return new SocksProxyAgent(proxyUrl);
+    } else {
+      return new HttpsProxyAgent(proxyUrl);
+    }
+  }
+
 
   async connect(instanceId: string): Promise<string | null> {
     // Carregar configurações salvas
@@ -145,6 +186,9 @@ export class BaileysService {
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
     const { version } = await fetchLatestBaileysVersion();
 
+    // Criar agent de proxy se configurado
+    const proxyAgent = this.createProxyAgent(savedSettings.proxy);
+
     const socket = makeWASocket({
       version,
       logger,
@@ -155,6 +199,8 @@ export class BaileysService {
       },
       generateHighQualityLinkPreview: true,
       syncFullHistory: savedSettings.syncFullHistory,
+      agent: proxyAgent,
+      fetchAgent: proxyAgent,
     });
 
     this.sockets.set(instanceId, { 

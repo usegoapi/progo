@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/store/auth';
 
@@ -40,12 +39,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-72 flex-col border-r border-border-dark bg-[#111111] md:flex">
         {/* Logo */}
         <div className="flex h-20 items-center justify-between px-6 border-b border-border-dark/50">
-          <Image
+          <img
             src="/img/logosite.png"
             alt="GO-API Logo"
-            width={160}
-            height={50}
-            className="h-12 w-auto"
+            className="h-10 w-auto"
           />
           <span className="text-xs font-bold text-primary/70 bg-primary/10 px-2 py-1 rounded">V1</span>
         </div>

@@ -9,19 +9,118 @@ interface Integration {
   active: boolean;
 }
 
+// Toggle Component
+const Toggle = ({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) => (
+  <div className="flex items-center justify-between">
+    {label && <span className="text-sm text-slate-300">{label}</span>}
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-surface-light'}`}
+    >
+      <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  </div>
+);
+
+// Input Component
+const Input = ({ label, value, onChange, placeholder, type = 'text', required = false }: any) => (
+  <div>
+    <label className="block text-sm font-medium text-slate-300 mb-2">
+      {label}{required && <span className="text-primary">*</span>}
+    </label>
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full h-11 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
+    />
+  </div>
+);
+
+// Select Component
+const Select = ({ label, value, onChange, options }: any) => (
+  <div>
+    <label className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full h-11 px-4 bg-[#2a2a2a] text-white border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
+    >
+      {options.map((opt: any) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  </div>
+);
+
 export default function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [activeTab, setActiveTab] = useState('typebot');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const [typebotUrl, setTypebotUrl] = useState('');
-  const [n8nUrl, setN8nUrl] = useState('');
-  const [n8nKey, setN8nKey] = useState('');
-  const [chatwootUrl, setChatwootUrl] = useState('');
-  const [chatwootKey, setChatwootKey] = useState('');
-  const [chatwootAccount, setChatwootAccount] = useState('');
-  const [chatwootInbox, setChatwootInbox] = useState('');
+  // Typebot State
+  const [typebot, setTypebot] = useState({
+    enabled: false,
+    description: '',
+    apiUrl: '',
+    publicName: '',
+    triggerType: 'keyword',
+    triggerOperator: 'contains',
+    keyword: '',
+    expireMinutes: 0,
+    keywordFinish: '',
+    delayMessage: 1000,
+    unknownMessage: '',
+    listeningFromMe: false,
+    stopBotFromMe: false,
+    keepOpen: false,
+    debounceTime: 10,
+  });
+
+  // n8n State
+  const [n8n, setN8n] = useState({
+    enabled: false,
+    description: '',
+    webhookUrl: '',
+    basicAuthUser: '',
+    basicAuthPassword: '',
+    triggerType: 'keyword',
+    triggerOperator: 'contains',
+    keyword: '',
+    expireMinutes: 0,
+    keywordFinish: '',
+    delayMessage: 1000,
+    unknownMessage: '',
+    listeningFromMe: false,
+    stopBotFromMe: false,
+    keepOpen: false,
+    debounceTime: 10,
+    splitMessages: false,
+  });
+
+  // Chatwoot State
+  const [chatwoot, setChatwoot] = useState({
+    enabled: false,
+    sqs: false,
+    url: '',
+    accountId: '',
+    token: '',
+    signMessages: false,
+    signDelimiter: '\\n',
+    nameInbox: '',
+    organization: '',
+    logo: '',
+    conversationPending: false,
+    reopenConversation: true,
+    importContacts: false,
+    importMessages: false,
+    daysLimitImport: 3,
+    ignoreJids: '',
+    autoCreate: true,
+  });
 
   useEffect(() => {
     loadIntegrations();
@@ -30,21 +129,21 @@ export default function Integrations() {
   const loadIntegrations = async () => {
     try {
       const { data } = await api.get('/integrations');
-      setIntegrations(data);
+      const arr = Array.isArray(data) ? data : [];
+      setIntegrations(arr);
 
-      data.forEach((int: Integration) => {
-        if (int.type === 'TYPEBOT') setTypebotUrl(int.config.webhookUrl || '');
-        else if (int.type === 'N8N') {
-          setN8nUrl(int.config.webhookUrl || '');
-          setN8nKey(int.config.apiKey || '');
-        } else if (int.type === 'CHATWOOT') {
-          setChatwootUrl(int.config.apiUrl || '');
-          setChatwootKey(int.config.apiKey || '');
-          setChatwootAccount(int.config.accountId || '');
-          setChatwootInbox(int.config.inboxId || '');
+      arr.forEach((int: Integration) => {
+        if (int.type === 'TYPEBOT' || int.type === 'typebot') {
+          setTypebot(prev => ({ ...prev, ...int.config, enabled: int.active }));
+        } else if (int.type === 'N8N' || int.type === 'n8n') {
+          setN8n(prev => ({ ...prev, ...int.config, enabled: int.active }));
+        } else if (int.type === 'CHATWOOT' || int.type === 'chatwoot') {
+          setChatwoot(prev => ({ ...prev, ...int.config, enabled: int.active }));
         }
       });
-    } catch {}
+    } catch {
+      setIntegrations([]);
+    }
   };
 
   const saveIntegration = async (type: string) => {
@@ -52,17 +151,23 @@ export default function Integrations() {
     setMessage('');
     try {
       let config = {};
-      if (type === 'typebot') config = { webhookUrl: typebotUrl };
-      else if (type === 'n8n') config = { webhookUrl: n8nUrl, apiKey: n8nKey };
-      else if (type === 'chatwoot')
-        config = {
-          apiUrl: chatwootUrl,
-          apiKey: chatwootKey,
-          accountId: chatwootAccount,
-          inboxId: chatwootInbox,
-        };
+      let active = false;
 
-      await api.post(`/integrations/${type}`, { config, active: true });
+      if (type === 'typebot') {
+        const { enabled, ...rest } = typebot;
+        config = rest;
+        active = enabled;
+      } else if (type === 'n8n') {
+        const { enabled, ...rest } = n8n;
+        config = rest;
+        active = enabled;
+      } else if (type === 'chatwoot') {
+        const { enabled, ...rest } = chatwoot;
+        config = rest;
+        active = enabled;
+      }
+
+      await api.post(`/integrations/${type}`, config);
       setMessage('Configuração salva com sucesso!');
       loadIntegrations();
     } catch {
@@ -78,7 +183,7 @@ export default function Integrations() {
   ];
 
   const getIntegrationStatus = (type: string) => {
-    const int = integrations.find((i) => i.type === type.toUpperCase());
+    const int = integrations.find((i) => i.type.toLowerCase() === type.toLowerCase());
     return int?.active;
   };
 
@@ -86,33 +191,24 @@ export default function Integrations() {
     <Layout>
       <div className="mb-10">
         <h2 className="text-4xl font-black tracking-tight text-white mb-2">Integrações</h2>
-        <p className="text-slate-400 text-lg font-light">
-          Configure suas integrações com plataformas externas.
-        </p>
+        <p className="text-slate-400 text-lg font-light">Configure suas integrações com plataformas externas.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar Tabs */}
+        {/* Sidebar */}
         <div className="lg:col-span-1">
           <div className="rounded-2xl border border-border-dark bg-surface-dark p-4 space-y-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setMessage('');
-                }}
+                onClick={() => { setActiveTab(tab.id); setMessage(''); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-primary/10 text-primary border border-primary/20'
-                    : 'text-slate-400 hover:bg-surface-light hover:text-white'
+                  activeTab === tab.id ? 'bg-primary/10 text-primary border border-primary/20' : 'text-slate-400 hover:bg-surface-light hover:text-white'
                 }`}
               >
                 <span className="material-symbols-outlined">{tab.icon}</span>
                 {tab.label}
-                {getIntegrationStatus(tab.id) && (
-                  <span className="ml-auto h-2 w-2 rounded-full bg-success" />
-                )}
+                {getIntegrationStatus(tab.id) && <span className="ml-auto h-2 w-2 rounded-full bg-success" />}
               </button>
             ))}
           </div>
@@ -121,166 +217,263 @@ export default function Integrations() {
         {/* Config Panel */}
         <div className="lg:col-span-3 rounded-2xl border border-border-dark bg-surface-dark p-6">
           {message && (
-            <div
-              className={`mb-6 p-4 rounded-lg text-sm ${
-                message.includes('Erro')
-                  ? 'bg-danger/10 text-danger border border-danger/20'
-                  : 'bg-success/10 text-success border border-success/20'
-              }`}
-            >
+            <div className={`mb-6 p-4 rounded-lg text-sm ${message.includes('Erro') ? 'bg-danger/10 text-danger border border-danger/20' : 'bg-success/10 text-success border border-success/20'}`}>
               {message}
             </div>
           )}
 
+          {/* TYPEBOT */}
           {activeTab === 'typebot' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-blue-500 text-2xl">smart_toy</span>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-blue-500 text-2xl">smart_toy</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Typebot</h3>
+                    <p className="text-slate-400 text-sm">Conecte com chatbots do Typebot</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Typebot</h3>
-                  <p className="text-slate-400 text-sm">
-                    Conecte com chatbots do Typebot para automação
-                  </p>
+                <Toggle checked={typebot.enabled} onChange={(v) => setTypebot({ ...typebot, enabled: v })} />
+              </div>
+
+              <div className="space-y-4">
+                <Input label="Description" value={typebot.description} onChange={(v: string) => setTypebot({ ...typebot, description: v })} placeholder="Descrição da integração" />
+                
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Typebot Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input label="Typebot API URL" value={typebot.apiUrl} onChange={(v: string) => setTypebot({ ...typebot, apiUrl: v })} placeholder="https://typebot.io/api/v1/..." required />
+                    <Input label="Typebot Public Name" value={typebot.publicName} onChange={(v: string) => setTypebot({ ...typebot, publicName: v })} placeholder="Nome público" />
+                  </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Trigger Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Select 
+                      label="Trigger Type" 
+                      value={typebot.triggerType} 
+                      onChange={(v: string) => setTypebot({ ...typebot, triggerType: v })}
+                      options={[
+                        { value: 'keyword', label: 'Keyword' },
+                        { value: 'all', label: 'All' },
+                        { value: 'advanced', label: 'Advanced' },
+                        { value: 'none', label: 'None' },
+                      ]}
+                    />
+                    <Select 
+                      label="Trigger Operator" 
+                      value={typebot.triggerOperator} 
+                      onChange={(v: string) => setTypebot({ ...typebot, triggerOperator: v })}
+                      options={[
+                        { value: 'contains', label: 'Contains' },
+                        { value: 'equals', label: 'Equals' },
+                        { value: 'startsWith', label: 'Starts With' },
+                        { value: 'endsWith', label: 'Ends With' },
+                        { value: 'regex', label: 'Regex' },
+                      ]}
+                    />
+                    <Input label="Keyword/Trigger" value={typebot.keyword} onChange={(v: string) => setTypebot({ ...typebot, keyword: v })} placeholder="Palavra-chave" />
+                  </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">General Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input label="Expire in minutes" type="number" value={typebot.expireMinutes} onChange={(v: string) => setTypebot({ ...typebot, expireMinutes: parseInt(v) || 0 })} placeholder="0" />
+                    <Input label="Keyword Finish" value={typebot.keywordFinish} onChange={(v: string) => setTypebot({ ...typebot, keywordFinish: v })} placeholder="#sair" />
+                    <Input label="Default Delay Message (ms)" type="number" value={typebot.delayMessage} onChange={(v: string) => setTypebot({ ...typebot, delayMessage: parseInt(v) || 1000 })} placeholder="1000" />
+                    <Input label="Unknown Message" value={typebot.unknownMessage} onChange={(v: string) => setTypebot({ ...typebot, unknownMessage: v })} placeholder="Mensagem para comando desconhecido" />
+                    <Input label="Debounce Time (s)" type="number" value={typebot.debounceTime} onChange={(v: string) => setTypebot({ ...typebot, debounceTime: parseInt(v) || 10 })} placeholder="10" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={typebot.listeningFromMe} onChange={(v) => setTypebot({ ...typebot, listeningFromMe: v })} label="Listening from me" />
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={typebot.stopBotFromMe} onChange={(v) => setTypebot({ ...typebot, stopBotFromMe: v })} label="Stop bot from me" />
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={typebot.keepOpen} onChange={(v) => setTypebot({ ...typebot, keepOpen: v })} label="Keep open" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Webhook URL</label>
-                <input
-                  type="text"
-                  placeholder="https://typebot.io/api/v1/webhooks/..."
-                  value={typebotUrl}
-                  onChange={(e) => setTypebotUrl(e.target.value)}
-                  className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                />
-              </div>
-
-              <button
-                onClick={() => saveIntegration('typebot')}
-                disabled={loading}
-                className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50"
-              >
+              <button onClick={() => saveIntegration('typebot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
                 {loading ? 'Salvando...' : 'Salvar Configuração'}
               </button>
             </div>
           )}
 
+          {/* N8N */}
           {activeTab === 'n8n' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-orange-500 text-2xl">
-                    account_tree
-                  </span>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-orange-500 text-2xl">account_tree</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">n8n</h3>
+                    <p className="text-slate-400 text-sm">Integre com fluxos de automação do n8n</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">n8n</h3>
-                  <p className="text-slate-400 text-sm">
-                    Integre com fluxos de automação do n8n
-                  </p>
+                <Toggle checked={n8n.enabled} onChange={(v) => setN8n({ ...n8n, enabled: v })} />
+              </div>
+
+              <div className="space-y-4">
+                <Input label="Description" value={n8n.description} onChange={(v: string) => setN8n({ ...n8n, description: v })} placeholder="Descrição da integração" />
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">n8n Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <Input label="Webhook URL" value={n8n.webhookUrl} onChange={(v: string) => setN8n({ ...n8n, webhookUrl: v })} placeholder="https://n8n.seudominio.com/webhook/..." required />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Basic Auth (Optional)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input label="Basic Auth User" value={n8n.basicAuthUser} onChange={(v: string) => setN8n({ ...n8n, basicAuthUser: v })} placeholder="Usuário" />
+                    <Input label="Basic Auth Password" type="password" value={n8n.basicAuthPassword} onChange={(v: string) => setN8n({ ...n8n, basicAuthPassword: v })} placeholder="Senha" />
+                  </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Trigger Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Select 
+                      label="Trigger Type" 
+                      value={n8n.triggerType} 
+                      onChange={(v: string) => setN8n({ ...n8n, triggerType: v })}
+                      options={[
+                        { value: 'keyword', label: 'Keyword' },
+                        { value: 'all', label: 'All' },
+                        { value: 'advanced', label: 'Advanced' },
+                        { value: 'none', label: 'None' },
+                      ]}
+                    />
+                    <Select 
+                      label="Trigger Operator" 
+                      value={n8n.triggerOperator} 
+                      onChange={(v: string) => setN8n({ ...n8n, triggerOperator: v })}
+                      options={[
+                        { value: 'contains', label: 'Contains' },
+                        { value: 'equals', label: 'Equals' },
+                        { value: 'startsWith', label: 'Starts With' },
+                        { value: 'endsWith', label: 'Ends With' },
+                        { value: 'regex', label: 'Regex' },
+                      ]}
+                    />
+                    <Input label="Keyword/Trigger" value={n8n.keyword} onChange={(v: string) => setN8n({ ...n8n, keyword: v })} placeholder="Palavra-chave" />
+                  </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">General Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input label="Expire in minutes" type="number" value={n8n.expireMinutes} onChange={(v: string) => setN8n({ ...n8n, expireMinutes: parseInt(v) || 0 })} placeholder="0" />
+                    <Input label="Keyword Finish" value={n8n.keywordFinish} onChange={(v: string) => setN8n({ ...n8n, keywordFinish: v })} placeholder="#sair" />
+                    <Input label="Default Delay Message (ms)" type="number" value={n8n.delayMessage} onChange={(v: string) => setN8n({ ...n8n, delayMessage: parseInt(v) || 1000 })} placeholder="1000" />
+                    <Input label="Unknown Message" value={n8n.unknownMessage} onChange={(v: string) => setN8n({ ...n8n, unknownMessage: v })} placeholder="Mensagem para comando desconhecido" />
+                    <Input label="Debounce Time (s)" type="number" value={n8n.debounceTime} onChange={(v: string) => setN8n({ ...n8n, debounceTime: parseInt(v) || 10 })} placeholder="10" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={n8n.listeningFromMe} onChange={(v) => setN8n({ ...n8n, listeningFromMe: v })} label="Listening from me" />
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={n8n.stopBotFromMe} onChange={(v) => setN8n({ ...n8n, stopBotFromMe: v })} label="Stop bot from me" />
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={n8n.keepOpen} onChange={(v) => setN8n({ ...n8n, keepOpen: v })} label="Keep open" />
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={n8n.splitMessages} onChange={(v) => setN8n({ ...n8n, splitMessages: v })} label="Split Messages" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Webhook URL</label>
-                <input
-                  type="text"
-                  placeholder="https://n8n.seudominio.com/webhook/..."
-                  value={n8nUrl}
-                  onChange={(e) => setN8nUrl(e.target.value)}
-                  className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  API Key (opcional)
-                </label>
-                <input
-                  type="password"
-                  placeholder="Sua API Key"
-                  value={n8nKey}
-                  onChange={(e) => setN8nKey(e.target.value)}
-                  className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                />
-              </div>
-
-              <button
-                onClick={() => saveIntegration('n8n')}
-                disabled={loading}
-                className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50"
-              >
+              <button onClick={() => saveIntegration('n8n')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
                 {loading ? 'Salvando...' : 'Salvar Configuração'}
               </button>
             </div>
           )}
 
+          {/* CHATWOOT */}
           {activeTab === 'chatwoot' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-purple-500 text-2xl">
-                    support_agent
-                  </span>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-purple-500 text-2xl">support_agent</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Chatwoot</h3>
+                    <p className="text-slate-400 text-sm">Sincronize conversas com o Chatwoot</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Chatwoot</h3>
-                  <p className="text-slate-400 text-sm">
-                    Sincronize conversas com o Chatwoot
-                  </p>
+                <Toggle checked={chatwoot.enabled} onChange={(v) => setChatwoot({ ...chatwoot, enabled: v })} />
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-surface-light rounded-lg mb-4">
+                  <Toggle checked={chatwoot.sqs} onChange={(v) => setChatwoot({ ...chatwoot, sqs: v })} label="SQS" />
+                  <p className="text-xs text-slate-500 mt-1">Usar Amazon SQS para filas</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Chatwoot URL" value={chatwoot.url} onChange={(v: string) => setChatwoot({ ...chatwoot, url: v })} placeholder="https://app.chatwoot.com" required />
+                  <Input label="Account ID" value={chatwoot.accountId} onChange={(v: string) => setChatwoot({ ...chatwoot, accountId: v })} placeholder="1" required />
+                  <Input label="Token" type="password" value={chatwoot.token} onChange={(v: string) => setChatwoot({ ...chatwoot, token: v })} placeholder="Seu token de acesso" required />
+                  <Input label="Name Inbox" value={chatwoot.nameInbox} onChange={(v: string) => setChatwoot({ ...chatwoot, nameInbox: v })} placeholder="Nome da inbox" />
+                  <Input label="Organization" value={chatwoot.organization} onChange={(v: string) => setChatwoot({ ...chatwoot, organization: v })} placeholder="Nome da organização" />
+                  <Input label="Logo URL" value={chatwoot.logo} onChange={(v: string) => setChatwoot({ ...chatwoot, logo: v })} placeholder="https://..." />
+                  <Input label="Sign Delimiter" value={chatwoot.signDelimiter} onChange={(v: string) => setChatwoot({ ...chatwoot, signDelimiter: v })} placeholder="\n" />
+                  <Input label="Days Limit Import Messages" type="number" value={chatwoot.daysLimitImport} onChange={(v: string) => setChatwoot({ ...chatwoot, daysLimitImport: parseInt(v) || 3 })} placeholder="3" />
+                  <div className="md:col-span-2">
+                    <Input label="Ignore JIDs (separados por vírgula)" value={chatwoot.ignoreJids} onChange={(v: string) => setChatwoot({ ...chatwoot, ignoreJids: v })} placeholder="5511999999999@s.whatsapp.net" />
+                  </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Opções</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={chatwoot.signMessages} onChange={(v) => setChatwoot({ ...chatwoot, signMessages: v })} label="Sign Messages" />
+                      <p className="text-xs text-slate-500 mt-1">Assinar mensagem com usuário</p>
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={chatwoot.conversationPending} onChange={(v) => setChatwoot({ ...chatwoot, conversationPending: v })} label="Conversation Pending" />
+                      <p className="text-xs text-slate-500 mt-1">Conversas iniciam como pendentes</p>
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={chatwoot.reopenConversation} onChange={(v) => setChatwoot({ ...chatwoot, reopenConversation: v })} label="Reopen Conversation" />
+                      <p className="text-xs text-slate-500 mt-1">Reabrir ao receber mensagem</p>
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={chatwoot.importContacts} onChange={(v) => setChatwoot({ ...chatwoot, importContacts: v })} label="Import Contacts" />
+                      <p className="text-xs text-slate-500 mt-1">Importar contatos do WhatsApp</p>
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={chatwoot.importMessages} onChange={(v) => setChatwoot({ ...chatwoot, importMessages: v })} label="Import Messages" />
+                      <p className="text-xs text-slate-500 mt-1">Importar mensagens do WhatsApp</p>
+                    </div>
+                    <div className="p-4 bg-surface-light rounded-lg">
+                      <Toggle checked={chatwoot.autoCreate} onChange={(v) => setChatwoot({ ...chatwoot, autoCreate: v })} label="Auto Create" />
+                      <p className="text-xs text-slate-500 mt-1">Criar integração automaticamente</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">API URL</label>
-                  <input
-                    type="text"
-                    placeholder="https://app.chatwoot.com"
-                    value={chatwootUrl}
-                    onChange={(e) => setChatwootUrl(e.target.value)}
-                    className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">API Key</label>
-                  <input
-                    type="password"
-                    placeholder="Sua API Key"
-                    value={chatwootKey}
-                    onChange={(e) => setChatwootKey(e.target.value)}
-                    className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Account ID</label>
-                  <input
-                    type="text"
-                    placeholder="1"
-                    value={chatwootAccount}
-                    onChange={(e) => setChatwootAccount(e.target.value)}
-                    className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Inbox ID</label>
-                  <input
-                    type="text"
-                    placeholder="1"
-                    value={chatwootInbox}
-                    onChange={(e) => setChatwootInbox(e.target.value)}
-                    className="w-full h-12 px-4 bg-[#2a2a2a] text-white placeholder-gray-500 border border-[#444] rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={() => saveIntegration('chatwoot')}
-                disabled={loading}
-                className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50"
-              >
+              <button onClick={() => saveIntegration('chatwoot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
                 {loading ? 'Salvando...' : 'Salvar Configuração'}
               </button>
             </div>

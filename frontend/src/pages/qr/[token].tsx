@@ -73,12 +73,10 @@ export default function SharedQRCode() {
         <div className="w-full max-w-md relative z-10">
           {/* Logo */}
           <div className="text-center mb-8">
-            <Image
+            <img
               src="/img/logosite.png"
               alt="GO-API Logo"
-              width={280}
-              height={100}
-              className="h-20 w-auto mx-auto"
+              className="h-16 w-auto mx-auto"
             />
           </div>
 

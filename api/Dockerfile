@@ -77,5 +77,20 @@ RUN ls -la dist/ && (test -f dist/main.js || test -f dist/src/main.js)
 
 EXPOSE 3001
 
-# Usar o caminho correto do main.js - usar db push ao invés de migrate deploy
-CMD ["sh", "-c", "npx prisma db push --skip-generate && if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]
+# Criar script de inicialização
+RUN cat > /app/start.sh << 'EOF'
+#!/bin/sh
+set -e
+echo "🔄 Running Prisma db push..."
+npx prisma db push --accept-data-loss
+echo "✅ Database schema synced!"
+echo "🚀 Starting API..."
+if [ -f dist/main.js ]; then
+  node dist/main.js
+else
+  node dist/src/main.js
+fi
+EOF
+RUN chmod +x /app/start.sh
+
+CMD ["/app/start.sh"]

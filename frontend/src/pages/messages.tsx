@@ -54,15 +54,18 @@ export default function Messages() {
 
   useEffect(() => {
     api.get('/instances').then(({ data }) => {
-      // Mostrar todas as instâncias, mas indicar quais estão conectadas
-      setInstances(data);
-      const connected = data.filter((i: Instance) => i.status === 'CONNECTED');
+      // Garantir que data é um array
+      const instancesArray = Array.isArray(data) ? data : [];
+      setInstances(instancesArray);
+      const connected = instancesArray.filter((i: Instance) => i.status === 'CONNECTED');
       if (connected.length > 0) {
         setSelectedInstance(connected[0].id);
-      } else if (data.length > 0) {
-        setSelectedInstance(data[0].id);
+      } else if (instancesArray.length > 0) {
+        setSelectedInstance(instancesArray[0].id);
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setInstances([]);
+    });
   }, []);
 
   const getSelectedInstanceStatus = () => {

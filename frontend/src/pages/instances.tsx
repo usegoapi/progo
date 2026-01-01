@@ -18,6 +18,14 @@ interface InstanceSettings {
   readMessages: boolean;
   syncFullHistory: boolean;
   readStatus: boolean;
+  proxy: {
+    enabled: boolean;
+    protocol: string;
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+  };
 }
 
 export default function Instances() {
@@ -38,6 +46,14 @@ export default function Instances() {
     readMessages: false,
     syncFullHistory: false,
     readStatus: false,
+    proxy: {
+      enabled: false,
+      protocol: 'http',
+      host: '',
+      port: 0,
+      username: '',
+      password: '',
+    },
   });
   const [deleteConfirm, setDeleteConfirm] = useState<Instance | null>(null);
   const [shareLink, setShareLink] = useState('');
@@ -198,6 +214,14 @@ export default function Instances() {
         readMessages: false,
         syncFullHistory: false,
         readStatus: false,
+        proxy: {
+          enabled: false,
+          protocol: 'http',
+          host: '',
+          port: 0,
+          username: '',
+          password: '',
+        },
       });
     }
   };
@@ -502,7 +526,116 @@ export default function Instances() {
               </div>
             </div>
 
-            <div className="p-4 max-h-[400px] overflow-y-auto">
+            <div className="p-4 max-h-[500px] overflow-y-auto">
+              {/* Proxy Section */}
+              <div className="mb-4 p-4 bg-surface-light/50 rounded-xl border border-border-dark">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">vpn_key</span>
+                    <span className="text-white font-semibold">Proxy</span>
+                  </div>
+                  <button
+                    onClick={() => setSettings(prev => ({ 
+                      ...prev, 
+                      proxy: { ...prev.proxy, enabled: !prev.proxy.enabled } 
+                    }))}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.proxy.enabled ? 'bg-primary' : 'bg-surface-light'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                        settings.proxy.enabled ? 'translate-x-7' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {settings.proxy.enabled && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Protocol</label>
+                      <select
+                        value={settings.proxy.protocol}
+                        onChange={(e) => setSettings(prev => ({ 
+                          ...prev, 
+                          proxy: { ...prev.proxy, protocol: e.target.value } 
+                        }))}
+                        className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
+                      >
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                        <option value="socks4">SOCKS4</option>
+                        <option value="socks5">SOCKS5</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-xs text-slate-400 mb-1">Host</label>
+                        <input
+                          type="text"
+                          placeholder="proxy.example.com"
+                          value={settings.proxy.host}
+                          onChange={(e) => setSettings(prev => ({ 
+                            ...prev, 
+                            proxy: { ...prev.proxy, host: e.target.value } 
+                          }))}
+                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Port</label>
+                        <input
+                          type="number"
+                          placeholder="8080"
+                          value={settings.proxy.port || ''}
+                          onChange={(e) => setSettings(prev => ({ 
+                            ...prev, 
+                            proxy: { ...prev.proxy, port: parseInt(e.target.value) || 0 } 
+                          }))}
+                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Username</label>
+                        <input
+                          type="text"
+                          placeholder="Opcional"
+                          value={settings.proxy.username}
+                          onChange={(e) => setSettings(prev => ({ 
+                            ...prev, 
+                            proxy: { ...prev.proxy, username: e.target.value } 
+                          }))}
+                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Password</label>
+                        <input
+                          type="password"
+                          placeholder="Opcional"
+                          value={settings.proxy.password}
+                          onChange={(e) => setSettings(prev => ({ 
+                            ...prev, 
+                            proxy: { ...prev.proxy, password: e.target.value } 
+                          }))}
+                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      O proxy será usado na próxima conexão da instância.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-border-dark my-4" />
+
+              {/* Other Settings */}
               {settingsOptions.map((option) => (
                 <div
                   key={option.key}
