@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../shared/prisma.service';
-import { BaileysService, InstanceSettings } from './baileys.service';
+import { BaileysService, InstanceSettings, InstanceSettingsUpdate } from './baileys.service';
 import { CreateInstanceDto, UpdateInstanceDto, UpdateSettingsDto } from './dto/instance.dto';
 import * as QRCode from 'qrcode';
 import * as crypto from 'crypto';

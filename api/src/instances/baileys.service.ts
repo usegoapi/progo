@@ -40,6 +40,17 @@ export interface InstanceSettings {
   proxy: ProxySettings;
 }
 
+// Tipo para atualização parcial (aceita campos opcionais)
+export type InstanceSettingsUpdate = {
+  rejectCalls?: boolean;
+  ignoreGroups?: boolean;
+  alwaysOnline?: boolean;
+  readMessages?: boolean;
+  syncFullHistory?: boolean;
+  readStatus?: boolean;
+  proxy?: Partial<ProxySettings>;
+};
+
 @Injectable()
 export class BaileysService {
   private readonly logger = new Logger(BaileysService.name);
@@ -91,9 +102,24 @@ export class BaileysService {
     };
   }
 
-  setSettings(instanceId: string, newSettings: Partial<InstanceSettings>) {
+  setSettings(instanceId: string, newSettings: InstanceSettingsUpdate): InstanceSettings {
     const current = this.getSettings(instanceId);
-    const updated = { ...current, ...newSettings };
+    
+    // Merge proxy settings separadamente
+    const updatedProxy = newSettings.proxy 
+      ? { ...current.proxy, ...newSettings.proxy }
+      : current.proxy;
+    
+    const updated: InstanceSettings = {
+      rejectCalls: newSettings.rejectCalls ?? current.rejectCalls,
+      ignoreGroups: newSettings.ignoreGroups ?? current.ignoreGroups,
+      alwaysOnline: newSettings.alwaysOnline ?? current.alwaysOnline,
+      readMessages: newSettings.readMessages ?? current.readMessages,
+      syncFullHistory: newSettings.syncFullHistory ?? current.syncFullHistory,
+      readStatus: newSettings.readStatus ?? current.readStatus,
+      proxy: updatedProxy,
+    };
+    
     this.settings.set(instanceId, updated);
     
     // Aplicar configurações no socket ativo
