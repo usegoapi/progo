@@ -69,3 +69,17 @@ export class UpdateSettingsDto {
   @IsOptional()
   proxy?: ProxySettingsDto;
 }
+
+
+export class SharedTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  instanceId: string;
+
+  @IsNumber()
+  @IsOptional()
+  expiresInHours?: number;
+
+  @IsOptional()
+  permissions?: string[];
+}
