@@ -1,10 +1,24 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../shared/prisma.service';
 import { CreateTypebotDto, CreateN8nDto, CreateChatwootDto, UpdateIntegrationDto } from './dto/integration.dto';
+import { TypebotService } from './typebot.service';
+import { N8nService } from './n8n.service';
+import { ChatwootService } from './chatwoot.service';
+import { BaileysService } from '../instances/baileys.service';
 
 @Injectable()
 export class IntegrationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => TypebotService))
+    private typebotService: TypebotService,
+    @Inject(forwardRef(() => N8nService))
+    private n8nService: N8nService,
+    @Inject(forwardRef(() => ChatwootService))
+    private chatwootService: ChatwootService,
+    @Inject(forwardRef(() => BaileysService))
+    private baileys: BaileysService,
+  ) {}
 
   async findAll(userId: string) {
     return this.prisma.integration.findMany({ 
@@ -23,16 +37,55 @@ export class IntegrationsService {
   private async upsertIntegration(userId: string, type: string, config: any, active: boolean = true) {
     const existing = await this.findByType(userId, type);
     
+    let result;
     if (existing) {
-      return this.prisma.integration.update({
+      result = await this.prisma.integration.update({
         where: { id: existing.id },
         data: { config, active },
       });
+    } else {
+      result = await this.prisma.integration.create({
+        data: { userId, type, config, active },
+      });
     }
+
+    // Gerenciar registro/desregistro das integrações em todas as instâncias do usuário
+    await this.syncIntegrationCallbacks(userId, type, active);
     
-    return this.prisma.integration.create({
-      data: { userId, type, config, active },
+    return result;
+  }
+
+  // Sincronizar callbacks das integrações com as instâncias conectadas
+  private async syncIntegrationCallbacks(userId: string, type: string, active: boolean) {
+    // Buscar todas as instâncias do usuário
+    const instances = await this.prisma.instance.findMany({
+      where: { userId },
     });
+
+    for (const instance of instances) {
+      const isConnected = this.baileys.getStatus(instance.id) === 'CONNECTED';
+      if (!isConnected) continue;
+
+      if (type === 'typebot') {
+        if (active) {
+          this.typebotService.registerInstance(instance.id);
+        } else {
+          this.typebotService.unregisterInstance(instance.id);
+        }
+      } else if (type === 'n8n') {
+        if (active) {
+          this.n8nService.registerInstance(instance.id);
+        } else {
+          this.n8nService.unregisterInstance(instance.id);
+        }
+      } else if (type === 'chatwoot') {
+        if (active) {
+          this.chatwootService.registerInstance(instance.id);
+        } else {
+          this.chatwootService.unregisterInstance(instance.id);
+        }
+      }
+    }
   }
 
   // ==================== TYPEBOT ====================

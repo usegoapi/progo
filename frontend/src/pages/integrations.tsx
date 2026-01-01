@@ -150,24 +150,17 @@ export default function Integrations() {
     setLoading(true);
     setMessage('');
     try {
-      let config = {};
-      let active = false;
+      let payload = {};
 
       if (type === 'typebot') {
-        const { enabled, ...rest } = typebot;
-        config = rest;
-        active = enabled;
+        payload = { ...typebot };
       } else if (type === 'n8n') {
-        const { enabled, ...rest } = n8n;
-        config = rest;
-        active = enabled;
+        payload = { ...n8n };
       } else if (type === 'chatwoot') {
-        const { enabled, ...rest } = chatwoot;
-        config = rest;
-        active = enabled;
+        payload = { ...chatwoot };
       }
 
-      await api.post(`/integrations/${type}`, config);
+      await api.post(`/integrations/${type}`, payload);
       setMessage('Configuração salva com sucesso!');
       loadIntegrations();
     } catch {

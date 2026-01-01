@@ -10,6 +10,6 @@ import { InstancesModule } from '../instances/instances.module';
   imports: [forwardRef(() => InstancesModule)],
   controllers: [IntegrationsController],
   providers: [IntegrationsService, TypebotService, N8nService, ChatwootService],
-  exports: [TypebotService, N8nService, ChatwootService],
+  exports: [IntegrationsService, TypebotService, N8nService, ChatwootService],
 })
 export class IntegrationsModule {}
