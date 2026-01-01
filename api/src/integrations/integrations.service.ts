@@ -38,6 +38,7 @@ export class IntegrationsService {
   // ==================== TYPEBOT ====================
   async createTypebot(dto: CreateTypebotDto, userId: string) {
     const config = {
+      enabled: dto.enabled !== false, // default true
       description: dto.description || '',
       apiUrl: dto.apiUrl || '',
       publicName: dto.publicName || '',
@@ -53,12 +54,13 @@ export class IntegrationsService {
       keepOpen: dto.keepOpen || false,
       debounceTime: dto.debounceTime || 10,
     };
-    return this.upsertIntegration(userId, 'typebot', config);
+    return this.upsertIntegration(userId, 'typebot', config, dto.enabled !== false);
   }
 
   // ==================== N8N ====================
   async createN8n(dto: CreateN8nDto, userId: string) {
     const config = {
+      enabled: dto.enabled !== false, // default true
       description: dto.description || '',
       webhookUrl: dto.webhookUrl || '',
       basicAuthUser: dto.basicAuthUser || '',
@@ -76,12 +78,13 @@ export class IntegrationsService {
       debounceTime: dto.debounceTime || 10,
       splitMessages: dto.splitMessages || false,
     };
-    return this.upsertIntegration(userId, 'n8n', config);
+    return this.upsertIntegration(userId, 'n8n', config, dto.enabled !== false);
   }
 
   // ==================== CHATWOOT ====================
   async createChatwoot(dto: CreateChatwootDto, userId: string) {
     const config = {
+      enabled: dto.enabled !== false, // default true
       sqs: dto.sqs || false,
       url: dto.url || '',
       accountId: dto.accountId || '',
@@ -99,7 +102,7 @@ export class IntegrationsService {
       ignoreJids: dto.ignoreJids || '',
       autoCreate: dto.autoCreate !== false, // default true
     };
-    return this.upsertIntegration(userId, 'chatwoot', config);
+    return this.upsertIntegration(userId, 'chatwoot', config, dto.enabled !== false);
   }
 
   // ==================== UPDATE / DELETE ====================

@@ -897,7 +897,7 @@ export default function Messages() {
             {/* Send Button */}
             <button
               onClick={sendMessage}
-              disabled={loading || !selectedInstance || !to || getSelectedInstanceStatus() !== 'CONNECTED'}
+              disabled={loading || !selectedInstance || !to}
               className="w-full h-12 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg shadow-lg hover:shadow-primary/20 transition-all duration-200 transform active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

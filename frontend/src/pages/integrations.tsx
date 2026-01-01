@@ -263,19 +263,23 @@ export default function Integrations() {
                         { value: 'none', label: 'None' },
                       ]}
                     />
-                    <Select 
-                      label="Trigger Operator" 
-                      value={typebot.triggerOperator} 
-                      onChange={(v: string) => setTypebot({ ...typebot, triggerOperator: v })}
-                      options={[
-                        { value: 'contains', label: 'Contains' },
-                        { value: 'equals', label: 'Equals' },
-                        { value: 'startsWith', label: 'Starts With' },
-                        { value: 'endsWith', label: 'Ends With' },
-                        { value: 'regex', label: 'Regex' },
-                      ]}
-                    />
-                    <Input label="Keyword/Trigger" value={typebot.keyword} onChange={(v: string) => setTypebot({ ...typebot, keyword: v })} placeholder="Palavra-chave" />
+                    {typebot.triggerType === 'keyword' && (
+                      <>
+                        <Select 
+                          label="Trigger Operator" 
+                          value={typebot.triggerOperator} 
+                          onChange={(v: string) => setTypebot({ ...typebot, triggerOperator: v })}
+                          options={[
+                            { value: 'contains', label: 'Contains' },
+                            { value: 'equals', label: 'Equals' },
+                            { value: 'startsWith', label: 'Starts With' },
+                            { value: 'endsWith', label: 'Ends With' },
+                            { value: 'regex', label: 'Regex' },
+                          ]}
+                        />
+                        <Input label="Keyword/Trigger" value={typebot.keyword} onChange={(v: string) => setTypebot({ ...typebot, keyword: v })} placeholder="Palavra-chave" />
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -358,19 +362,23 @@ export default function Integrations() {
                         { value: 'none', label: 'None' },
                       ]}
                     />
-                    <Select 
-                      label="Trigger Operator" 
-                      value={n8n.triggerOperator} 
-                      onChange={(v: string) => setN8n({ ...n8n, triggerOperator: v })}
-                      options={[
-                        { value: 'contains', label: 'Contains' },
-                        { value: 'equals', label: 'Equals' },
-                        { value: 'startsWith', label: 'Starts With' },
-                        { value: 'endsWith', label: 'Ends With' },
-                        { value: 'regex', label: 'Regex' },
-                      ]}
-                    />
-                    <Input label="Keyword/Trigger" value={n8n.keyword} onChange={(v: string) => setN8n({ ...n8n, keyword: v })} placeholder="Palavra-chave" />
+                    {n8n.triggerType === 'keyword' && (
+                      <>
+                        <Select 
+                          label="Trigger Operator" 
+                          value={n8n.triggerOperator} 
+                          onChange={(v: string) => setN8n({ ...n8n, triggerOperator: v })}
+                          options={[
+                            { value: 'contains', label: 'Contains' },
+                            { value: 'equals', label: 'Equals' },
+                            { value: 'startsWith', label: 'Starts With' },
+                            { value: 'endsWith', label: 'Ends With' },
+                            { value: 'regex', label: 'Regex' },
+                          ]}
+                        />
+                        <Input label="Keyword/Trigger" value={n8n.keyword} onChange={(v: string) => setN8n({ ...n8n, keyword: v })} placeholder="Palavra-chave" />
+                      </>
+                    )}
                   </div>
                 </div>
 

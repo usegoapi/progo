@@ -76,7 +76,8 @@ export default function SharedQRCode() {
             <img
               src="/img/logosite.png"
               alt="GO-API Logo"
-              className="h-16 w-auto mx-auto"
+              className="h-14 w-auto mx-auto"
+              style={{ imageRendering: 'crisp-edges' }}
             />
           </div>
 

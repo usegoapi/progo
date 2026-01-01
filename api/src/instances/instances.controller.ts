@@ -61,6 +61,12 @@ export class InstancesController {
     return this.instancesService.reconnect(id, req.user.id);
   }
 
+  @Post(':id/restart')
+  @UseGuards(JwtAuthGuard)
+  restart(@Param('id') id: string, @Request() req) {
+    return this.instancesService.restart(id, req.user.id);
+  }
+
   @Get(':id/qr')
   @UseGuards(JwtAuthGuard)
   getQR(@Param('id') id: string, @Request() req) {

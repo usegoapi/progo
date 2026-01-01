@@ -59,6 +59,7 @@ export default function Instances() {
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedCard, setCopiedCard] = useState<string | null>(null);
+  const [pollingActive, setPollingActive] = useState(false);
 
   const loadInstances = async () => {
     try {
@@ -97,6 +98,7 @@ export default function Instances() {
   const generateQrCode = async (id: string, name: string) => {
     setQrModal({ id, name, qr: null, connected: false, connecting: false });
     setShareLink('');
+    setPollingActive(true);
     
     try {
       await api.post(`/instances/${id}/connect`);
@@ -106,7 +108,19 @@ export default function Instances() {
   };
 
   const pollQrCode = async (id: string, name: string) => {
+    let shouldPoll = true;
+    let pollCount = 0;
+    const maxPolls = 60; // Máximo de 60 tentativas (3 minutos com intervalo de 3s)
+    
     const poll = async () => {
+      // Verificar se o modal ainda está aberto e se não excedeu o limite
+      if (!shouldPoll || pollCount >= maxPolls) {
+        setPollingActive(false);
+        return;
+      }
+      
+      pollCount++;
+      
       try {
         const { data } = await api.get(`/instances/${id}/qr`);
         
@@ -116,6 +130,8 @@ export default function Instances() {
         }
         
         if (data.status === 'CONNECTED') {
+          shouldPoll = false;
+          setPollingActive(false);
           // Mostrar animação de conectando
           setQrModal({ id, name, qr: null, connected: false, connecting: true });
           
@@ -130,11 +146,41 @@ export default function Instances() {
           return;
         }
         
-        setTimeout(poll, 2000);
-      } catch {
-        setTimeout(poll, 2000);
+        if (shouldPoll) {
+          setTimeout(poll, 3000);
+        }
+      } catch (error: any) {
+        // Se for 404, parar o polling (instância não existe)
+        if (error.response?.status === 404) {
+          shouldPoll = false;
+          setPollingActive(false);
+          setQrModal(null);
+          return;
+        }
+        
+        if (shouldPoll) {
+          setTimeout(poll, 5000);
+        }
       }
     };
+    
+    // Função para parar o polling quando o modal fechar
+    const checkModalClosed = setInterval(() => {
+      const modal = document.querySelector('[data-qr-modal]');
+      if (!modal) {
+        shouldPoll = false;
+        setPollingActive(false);
+        clearInterval(checkModalClosed);
+      }
+    }, 1000);
+    
+    // Limpar o intervalo após o tempo máximo
+    setTimeout(() => {
+      clearInterval(checkModalClosed);
+      shouldPoll = false;
+      setPollingActive(false);
+    }, 180000); // 3 minutos
+    
     poll();
   };
 
@@ -176,6 +222,14 @@ export default function Instances() {
   const stopInstance = async (id: string) => {
     try {
       await api.post(`/instances/${id}/disconnect`);
+      loadInstances();
+    } catch {}
+  };
+
+  // Reiniciar instância sem precisar de QR (mantém sessão)
+  const restartInstance = async (id: string) => {
+    try {
+      await api.post(`/instances/${id}/restart`);
       loadInstances();
     } catch {}
   };
@@ -383,7 +437,7 @@ export default function Instances() {
 
       {/* QR Code Modal */}
       {qrModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div data-qr-modal className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-surface-dark border border-border-dark p-6 rounded-2xl text-center w-full max-w-sm relative overflow-hidden">
             {/* Background glow */}
             <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
@@ -767,15 +821,25 @@ export default function Instances() {
             </div>
 
             <div className="mt-auto space-y-3">
-              {/* Main Action Button */}
+              {/* Main Action Buttons */}
               {instance.status === 'CONNECTED' ? (
-                <button
-                  onClick={() => stopInstance(instance.id)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-bold text-danger hover:bg-danger hover:text-white hover:border-transparent transition-all active:scale-[0.98]"
-                >
-                  <span className="material-symbols-outlined text-[20px]">stop_circle</span>
-                  Parar Instância
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => restartInstance(instance.id)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary hover:text-black hover:border-transparent transition-all active:scale-[0.98]"
+                    title="Reiniciar sem perder sessão"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">refresh</span>
+                    Reiniciar
+                  </button>
+                  <button
+                    onClick={() => stopInstance(instance.id)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-bold text-danger hover:bg-danger hover:text-white hover:border-transparent transition-all active:scale-[0.98]"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">stop_circle</span>
+                    Parar
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => generateQrCode(instance.id, instance.name)}

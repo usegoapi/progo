@@ -2,6 +2,7 @@ import { IsString, IsBoolean, IsOptional, IsNumber, IsObject } from 'class-valid
 
 // ==================== TYPEBOT ====================
 export class CreateTypebotDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() apiUrl?: string;
   @IsOptional() @IsString() publicName?: string;
@@ -20,6 +21,7 @@ export class CreateTypebotDto {
 
 // ==================== N8N ====================
 export class CreateN8nDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() webhookUrl?: string;
   @IsOptional() @IsString() basicAuthUser?: string;
@@ -40,6 +42,7 @@ export class CreateN8nDto {
 
 // ==================== CHATWOOT ====================
 export class CreateChatwootDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
   @IsOptional() @IsBoolean() sqs?: boolean;
   @IsOptional() @IsString() url?: string;
   @IsOptional() @IsString() accountId?: string;

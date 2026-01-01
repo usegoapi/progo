@@ -27,8 +27,9 @@ model Instance {
   sessionData Json?
   createdAt   DateTime @default(now())
   
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  sharedTokens SharedToken[]
 }
 
 model Message {
@@ -64,4 +65,15 @@ model Integration {
   createdAt DateTime @default(now())
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SharedToken {
+  id          String   @id @default(uuid())
+  instanceId  String
+  token       String   @unique
+  permissions String[]
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 }

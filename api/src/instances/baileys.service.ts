@@ -58,6 +58,8 @@ export class BaileysService {
   private settings: Map<string, InstanceSettings> = new Map();
   private qrCallbacks: Map<string, (qr: string) => void> = new Map();
   private statusCallbacks: Map<string, (status: string) => void> = new Map();
+  // Suporta múltiplos callbacks por instância (key: instanceId, value: Map<callbackId, callback>)
+  private messageCallbacks: Map<string, Map<string, (remoteJid: string, message: string, fromMe: boolean) => void>> = new Map();
 
   getSocket(instanceId: string) {
     return this.sockets.get(instanceId)?.socket;
@@ -176,6 +178,23 @@ export class BaileysService {
     this.statusCallbacks.set(instanceId, callback);
   }
 
+  onMessage(instanceId: string, callback: (remoteJid: string, message: string, fromMe: boolean) => void, callbackId?: string) {
+    if (!this.messageCallbacks.has(instanceId)) {
+      this.messageCallbacks.set(instanceId, new Map());
+    }
+    // Usar callbackId ou gerar um único baseado no timestamp
+    const id = callbackId || `cb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.messageCallbacks.get(instanceId)!.set(id, callback);
+    return id;
+  }
+
+  offMessage(instanceId: string, callbackId: string) {
+    const callbacks = this.messageCallbacks.get(instanceId);
+    if (callbacks) {
+      callbacks.delete(callbackId);
+    }
+  }
+
   // Criar agent de proxy baseado nas configurações
   private createProxyAgent(proxy: ProxySettings): any {
     if (!proxy.enabled || !proxy.host || !proxy.port) {
@@ -253,6 +272,26 @@ export class BaileysService {
         // Marcar como lida se configurado
         if (settings.readMessages && !msg.key.fromMe) {
           await socket.readMessages([msg.key]);
+        }
+
+        // Extrair texto da mensagem
+        const messageText = msg.message?.conversation || 
+                           msg.message?.extendedTextMessage?.text ||
+                           msg.message?.imageMessage?.caption ||
+                           msg.message?.videoMessage?.caption || '';
+
+        // Chamar todos os callbacks de mensagem registrados para esta instância
+        if (messageText && msg.key.remoteJid && this.messageCallbacks.has(instanceId)) {
+          const callbacks = this.messageCallbacks.get(instanceId);
+          if (callbacks) {
+            for (const [, callback] of callbacks) {
+              try {
+                callback(msg.key.remoteJid, messageText, msg.key.fromMe || false);
+              } catch (err) {
+                this.logger.error(`Erro ao executar callback de mensagem: ${err}`);
+              }
+            }
+          }
         }
       }
     });
@@ -387,5 +426,21 @@ export class BaileysService {
       this.sockets.delete(instanceId);
     }
     return this.connect(instanceId);
+  }
+
+  // Reiniciar instância mantendo a sessão (não pede QR novamente)
+  async restart(instanceId: string): Promise<void> {
+    const instance = this.sockets.get(instanceId);
+    if (instance?.socket) {
+      try {
+        // Apenas fecha a conexão atual
+        instance.socket.end();
+      } catch {}
+      this.sockets.delete(instanceId);
+    }
+    
+    // Reconecta usando a sessão existente
+    await this.connect(instanceId);
+    this.logger.log(`Instância ${instanceId} reiniciada`);
   }
 }
