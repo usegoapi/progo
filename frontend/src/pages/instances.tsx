@@ -57,6 +57,8 @@ export default function Instances() {
     return () => clearInterval(interval);
   }, []);
 
+  const [apiError, setApiError] = useState<string | null>(null);
+
   const createInstance = async () => {
     if (!newName.trim()) return;
     setLoading(true);
@@ -65,7 +67,12 @@ export default function Instances() {
       setNewName('');
       setShowCreate(false);
       await loadInstances();
-    } catch {}
+    } catch (error: any) {
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || !error.response) {
+        setApiError('API Offline');
+        setShowCreate(false);
+      }
+    }
     setLoading(false);
   };
 
@@ -279,6 +286,44 @@ export default function Instances() {
           </select>
         </div>
       </div>
+
+      {/* API Offline Modal */}
+      {apiError && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-dark border border-border-dark p-6 rounded-2xl w-full max-w-sm text-center">
+            <div className="h-16 w-16 rounded-full bg-danger/10 flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-danger text-4xl">cloud_off</span>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">API Offline</h3>
+            <p className="text-slate-400 text-sm mb-6">
+              Não foi possível conectar com a API. Verifique se o servidor está rodando e tente novamente.
+            </p>
+            <div className="bg-surface-light rounded-lg p-3 mb-6">
+              <p className="text-xs text-slate-500 mb-1">Possíveis causas:</p>
+              <ul className="text-xs text-slate-400 text-left space-y-1">
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-sm">arrow_right</span>
+                  Servidor da API não está rodando
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-sm">arrow_right</span>
+                  Problema de conexão com a rede
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-sm">arrow_right</span>
+                  URL da API incorreta
+                </li>
+              </ul>
+            </div>
+            <button
+              onClick={() => setApiError(null)}
+              className="w-full py-2.5 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all text-sm"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
