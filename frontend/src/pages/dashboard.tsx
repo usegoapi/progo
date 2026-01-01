@@ -24,9 +24,10 @@ export default function Dashboard() {
   useEffect(() => {
     api.get('/instances')
       .then(({ data }) => {
-        const connected = data.filter((i: Instance) => i.status === 'CONNECTED');
+        const instances = Array.isArray(data) ? data : [];
+        const connected = instances.filter((i: Instance) => i.status === 'CONNECTED');
         setStats({
-          instances: data.length,
+          instances: instances.length,
           connected: connected.length,
           messages: 0,
         });

@@ -47,8 +47,10 @@ export default function Instances() {
   const loadInstances = async () => {
     try {
       const { data } = await api.get('/instances');
-      setInstances(data);
-    } catch {}
+      setInstances(Array.isArray(data) ? data : []);
+    } catch {
+      setInstances([]);
+    }
   };
 
   useEffect(() => {

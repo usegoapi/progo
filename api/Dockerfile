@@ -77,5 +77,5 @@ RUN ls -la dist/ && (test -f dist/main.js || test -f dist/src/main.js)
 
 EXPOSE 3001
 
-# Usar o caminho correto do main.js
-CMD ["sh", "-c", "npx prisma migrate deploy && if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]
+# Usar o caminho correto do main.js - usar db push ao invés de migrate deploy
+CMD ["sh", "-c", "npx prisma db push --skip-generate && if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]
