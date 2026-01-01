@@ -39,13 +39,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="hidden w-72 flex-col border-r border-border-dark bg-[#111111] md:flex">
         {/* Logo */}
-        <div className="flex h-20 items-center px-6 border-b border-border-dark/50">
+        <div className="flex h-16 items-center px-6 border-b border-border-dark/50">
           <Image
             src="/img/logosite.png"
             alt="GO-API Logo"
-            width={140}
-            height={50}
-            className="h-10 w-auto"
+            width={120}
+            height={40}
+            className="h-8 w-auto"
           />
         </div>
 
@@ -115,6 +115,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               )
             )}
+
+            {/* Versão */}
+            <div className="mt-4 px-4">
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <span className="material-symbols-outlined text-sm text-primary/50">verified</span>
+                <span>GO V1</span>
+              </div>
+            </div>
           </nav>
 
           {/* User Card */}
