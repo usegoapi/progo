@@ -12,19 +12,19 @@ export class IntegrationsService {
 
   async createTypebot(dto: CreateTypebotDto, userId: string) {
     return this.prisma.integration.create({
-      data: { userId, type: 'typebot', config: dto },
+      data: { userId, type: 'typebot', config: JSON.parse(JSON.stringify(dto)) },
     });
   }
 
   async createN8n(dto: CreateN8nDto, userId: string) {
     return this.prisma.integration.create({
-      data: { userId, type: 'n8n', config: dto },
+      data: { userId, type: 'n8n', config: JSON.parse(JSON.stringify(dto)) },
     });
   }
 
   async createChatwoot(dto: CreateChatwootDto, userId: string) {
     return this.prisma.integration.create({
-      data: { userId, type: 'chatwoot', config: dto },
+      data: { userId, type: 'chatwoot', config: JSON.parse(JSON.stringify(dto)) },
     });
   }
 
