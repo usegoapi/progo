@@ -7,14 +7,18 @@ WORKDIR /app
 # =============================================
 # BAILEYS - Copiar apenas arquivos essenciais
 # =============================================
-# Criar estrutura do baileys
 RUN mkdir -p ./baileys/lib ./baileys/WAProto
 
-# Copiar apenas o necessário do Baileys (sem node_modules, src, examples, etc)
+# Copiar arquivos do Baileys
 COPY baileys/package.json ./baileys/
 COPY baileys/engine-requirements.js ./baileys/
 COPY baileys/lib/ ./baileys/lib/
 COPY baileys/WAProto/ ./baileys/WAProto/
+
+# Remover scripts de build do package.json do Baileys para evitar rebuild
+RUN sed -i 's/"prepare": "npm run build",//' ./baileys/package.json && \
+    sed -i 's/"prepack": "npm run build",//' ./baileys/package.json && \
+    sed -i 's/"build": "tsc -P tsconfig.build.json && tsc-esm-fix --tsconfig=tsconfig.build.json --ext=.js",/"build": "echo skipped",/' ./baileys/package.json
 
 # =============================================
 # API - Configuração
