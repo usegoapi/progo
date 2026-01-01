@@ -256,38 +256,121 @@ export class MessagesService {
 
     const to = this.formatPhone(dto.to);
     
-    const interactiveButtons = dto.buttons.map(btn => {
-      let name = 'quick_reply';
-      let params: any = { display_text: btn.displayText, id: btn.id || btn.displayText };
+    // Verificar se há botões CTA (URL, Call, Copy) - esses usam formato nativo
+    const hasCtaButtons = dto.buttons.some(btn => 
+      btn.type === 'cta_url' || btn.type === 'cta_call' || btn.type === 'cta_copy'
+    );
 
-      if (btn.type === 'cta_url') {
-        name = 'cta_url';
-        params = { display_text: btn.displayText, url: btn.url };
-      } else if (btn.type === 'cta_call') {
-        name = 'cta_call';
-        params = { display_text: btn.displayText, phone_number: btn.phoneNumber };
-      } else if (btn.type === 'cta_copy') {
-        name = 'cta_copy';
-        params = { display_text: btn.displayText, copy_code: btn.copyCode };
+    if (hasCtaButtons) {
+      // Usar formato de mensagem interativa nativa (compatível com iOS/Android/Web)
+      const nativeButtons = dto.buttons.map(btn => {
+        if (btn.type === 'cta_url') {
+          return {
+            name: 'cta_url',
+            buttonParamsJson: JSON.stringify({
+              display_text: btn.displayText,
+              url: btn.url,
+              merchant_url: btn.url,
+            }),
+          };
+        } else if (btn.type === 'cta_call') {
+          return {
+            name: 'cta_call',
+            buttonParamsJson: JSON.stringify({
+              display_text: btn.displayText,
+              phone_number: btn.phoneNumber,
+            }),
+          };
+        } else if (btn.type === 'cta_copy') {
+          return {
+            name: 'cta_copy',
+            buttonParamsJson: JSON.stringify({
+              display_text: btn.displayText,
+              copy_code: btn.copyCode,
+            }),
+          };
+        } else {
+          return {
+            name: 'quick_reply',
+            buttonParamsJson: JSON.stringify({
+              display_text: btn.displayText,
+              id: btn.id || btn.displayText,
+            }),
+          };
+        }
+      });
+
+      // Construir mensagem interativa nativa
+      const interactiveMessage: any = {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage: {
+              body: { text: dto.text },
+              footer: { text: dto.footer || 'GO-API' },
+              nativeFlowMessage: {
+                buttons: nativeButtons,
+                messageParamsJson: '',
+              },
+            },
+          },
+        },
+      };
+
+      // Adicionar header se tiver título ou imagem
+      if (dto.title) {
+        interactiveMessage.viewOnceMessage.message.interactiveMessage.header = {
+          title: dto.title,
+          hasMediaAttachment: false,
+        };
       }
 
-      return { name, buttonParamsJson: JSON.stringify(params) };
-    });
+      if (dto.imageUrl) {
+        try {
+          const imageBuffer = await this.downloadMedia(dto.imageUrl);
+          interactiveMessage.viewOnceMessage.message.interactiveMessage.header = {
+            hasMediaAttachment: true,
+            imageMessage: {
+              jpegThumbnail: imageBuffer,
+            },
+          };
+        } catch (e) {
+          this.logger.warn(`Failed to download image for interactive: ${e.message}`);
+        }
+      }
 
-    const msgPayload: any = {
-      text: dto.text,
-      footer: dto.footer || 'GO-API',
-      interactiveButtons,
-    };
+      await socket.relayMessage(to, interactiveMessage, {});
+    } else {
+      // Apenas quick_reply - usar formato de botões simples (mais compatível)
+      const buttons = dto.buttons.map((btn, index) => ({
+        buttonId: btn.id || `btn_${index}`,
+        buttonText: { displayText: btn.displayText },
+        type: 1,
+      }));
 
-    if (dto.title) msgPayload.title = dto.title;
-    if (dto.imageUrl) {
-      msgPayload.image = { url: dto.imageUrl };
-      msgPayload.caption = dto.text;
-      delete msgPayload.text;
+      const buttonMessage: any = {
+        text: dto.text,
+        footer: dto.footer || 'GO-API',
+        buttons,
+        headerType: 1,
+      };
+
+      if (dto.title) {
+        buttonMessage.title = dto.title;
+      }
+
+      if (dto.imageUrl) {
+        try {
+          const imageBuffer = await this.downloadMedia(dto.imageUrl);
+          buttonMessage.image = imageBuffer;
+          buttonMessage.headerType = 4;
+        } catch (e) {
+          this.logger.warn(`Failed to download image: ${e.message}`);
+        }
+      }
+
+      await socket.sendMessage(to, buttonMessage);
     }
 
-    await socket.sendMessage(to, msgPayload);
     return this.saveMessage(dto.instanceId, dto.to, 'INTERACTIVE', { text: dto.text, buttons: JSON.parse(JSON.stringify(dto.buttons)) });
   }
 }
