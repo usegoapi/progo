@@ -48,13 +48,6 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="mb-10">
-        <h2 className="text-4xl font-black tracking-tight text-white mb-2">Dashboard</h2>
-        <p className="text-slate-400 text-lg font-light">
-          Visão geral do seu sistema GO-API
-        </p>
-      </div>
-
       {/* API Status */}
       {apiStatus === 'offline' && (
         <div className="mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">

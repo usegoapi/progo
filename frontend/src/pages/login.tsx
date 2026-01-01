@@ -90,32 +90,29 @@ export default function Login() {
       });
 
       router.push('/dashboard');
-    } catch (apiError) {
-      console.log('Login na API falhou, usando login local');
+    } catch (apiError: any) {
+      console.log('Erro no login:', apiError);
       
-      // Login local
-      const localUser = {
-        id: '1',
-        email: config.adminEmail,
-        name: 'Administrador',
-        role: 'ADMIN'
-      };
-      const localToken = 'local-token-' + Date.now();
-
-      setUser(localUser, localToken);
-
-      await Swal.fire({
-        icon: 'success',
-        title: 'Bem-vindo!',
-        text: 'Login realizado com sucesso.',
-        background: '#1a1a1a',
-        color: '#fff',
-        confirmButtonColor: '#eaa800',
-        timer: 1500,
-        showConfirmButton: false,
-      });
-
-      router.push('/dashboard');
+      // Verificar se é erro de rede (API offline)
+      if (apiError.code === 'ERR_NETWORK' || !apiError.response) {
+        Swal.fire({
+          icon: 'error',
+          title: 'API Offline',
+          text: 'Não foi possível conectar com a API. Verifique se o servidor está rodando.',
+          background: '#1a1a1a',
+          color: '#fff',
+          confirmButtonColor: '#eaa800',
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Erro!',
+          text: apiError.response?.data?.message || 'Erro ao fazer login.',
+          background: '#1a1a1a',
+          color: '#fff',
+          confirmButtonColor: '#eaa800',
+        });
+      }
     }
 
     setLoading(false);
