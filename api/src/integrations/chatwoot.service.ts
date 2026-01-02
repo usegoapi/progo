@@ -39,9 +39,11 @@ interface ChatwootConfig {
 export class ChatwootService implements OnModuleInit {
   private readonly logger = new Logger(ChatwootService.name);
   private registeredInstances: Set<string> = new Set();
-  private contacts: Map<string, ChatwootContact> = new Map();
-  private conversations: Map<string, ChatwootConversation> = new Map();
-  private inboxes: Map<string, number> = new Map();
+  // Cache com TTL para evitar duplicatas e melhorar performance
+  private contacts: Map<string, { data: ChatwootContact; timestamp: number }> = new Map();
+  private conversations: Map<string, { data: ChatwootConversation; timestamp: number }> = new Map();
+  private inboxes: Map<string, { id: number; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
   constructor(
     private prisma: PrismaService,
@@ -51,26 +53,54 @@ export class ChatwootService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('ChatwootService inicializado');
+    // Limpar cache periodicamente
+    setInterval(() => this.cleanCache(), this.CACHE_TTL);
+  }
+
+  private cleanCache() {
+    const now = Date.now();
+    for (const [key, value] of this.contacts) {
+      if (now - value.timestamp > this.CACHE_TTL) {
+        this.contacts.delete(key);
+      }
+    }
+    for (const [key, value] of this.conversations) {
+      if (now - value.timestamp > this.CACHE_TTL) {
+        this.conversations.delete(key);
+      }
+    }
+    for (const [key, value] of this.inboxes) {
+      if (now - value.timestamp > this.CACHE_TTL) {
+        this.inboxes.delete(key);
+      }
+    }
   }
 
   registerInstance(instanceId: string) {
-    if (this.registeredInstances.has(instanceId)) return;
+    if (this.registeredInstances.has(instanceId)) {
+      this.logger.debug(`Chatwoot: Instância ${instanceId} já registrada`);
+      return;
+    }
 
     this.baileys.onMessage(
       instanceId,
       async (remoteJid, message, fromMe) => {
-        await this.processMessage(instanceId, remoteJid, message, fromMe);
+        // Processar imediatamente sem delay
+        this.processMessage(instanceId, remoteJid, message, fromMe).catch(err => {
+          this.logger.error(`Chatwoot: Erro ao processar mensagem: ${err.message}`);
+        });
       },
       `chatwoot_${instanceId}`,
     );
 
     this.registeredInstances.add(instanceId);
-    this.logger.log(`Chatwoot registrado para instância ${instanceId}`);
+    this.logger.log(`Chatwoot: Registrado para instância ${instanceId}`);
   }
 
   unregisterInstance(instanceId: string) {
     this.registeredInstances.delete(instanceId);
     this.baileys.offMessage(instanceId, `chatwoot_${instanceId}`);
+    this.logger.log(`Chatwoot: Desregistrado da instância ${instanceId}`);
   }
 
   private getContactKey(instanceId: string, remoteJid: string): string {
@@ -84,6 +114,8 @@ export class ChatwootService implements OnModuleInit {
   }
 
   async processMessage(instanceId: string, remoteJid: string, message: string, fromMe: boolean) {
+    const startTime = Date.now();
+    
     try {
       // Ignorar grupos, status e newsletters (não têm número de telefone válido)
       if (
@@ -141,14 +173,14 @@ export class ChatwootService implements OnModuleInit {
         return;
       }
 
-      this.logger.debug(`Chatwoot: Processando mensagem de ${remoteJid}: "${message}"`);
+      this.logger.log(`Chatwoot: Processando mensagem de ${remoteJid}: "${message.substring(0, 50)}..."`);
 
-      // Obter ou criar inbox
-      let inboxId = this.inboxes.get(instanceId);
+      // Obter ou criar inbox (com cache)
+      let inboxId = this.getCachedInbox(instanceId);
       if (!inboxId) {
         inboxId = await this.getOrCreateInbox(instanceId, config);
         if (inboxId) {
-          this.inboxes.set(instanceId, inboxId);
+          this.setCachedInbox(instanceId, inboxId);
         }
       }
 
@@ -157,13 +189,13 @@ export class ChatwootService implements OnModuleInit {
         return;
       }
 
-      // Obter ou criar contato
+      // Obter ou criar contato (com cache)
       const contactKey = this.getContactKey(instanceId, remoteJid);
-      let contact = this.contacts.get(contactKey);
+      let contact = this.getCachedContact(contactKey);
       if (!contact) {
         contact = await this.getOrCreateContact(remoteJid, config, inboxId);
         if (contact) {
-          this.contacts.set(contactKey, contact);
+          this.setCachedContact(contactKey, contact);
         }
       }
 
@@ -172,12 +204,12 @@ export class ChatwootService implements OnModuleInit {
         return;
       }
 
-      // Obter ou criar conversa
-      let conversation = this.conversations.get(contactKey);
+      // Obter ou criar conversa (com cache, mas revalidar se reopenConversation)
+      let conversation = this.getCachedConversation(contactKey);
       if (!conversation || (config.reopenConversation && !fromMe)) {
         conversation = await this.getOrCreateConversation(contact, config, inboxId);
         if (conversation) {
-          this.conversations.set(contactKey, conversation);
+          this.setCachedConversation(contactKey, conversation);
         }
       }
 
@@ -188,9 +220,52 @@ export class ChatwootService implements OnModuleInit {
 
       // Enviar mensagem para o Chatwoot
       await this.sendMessageToChatwoot(conversation.id, message, fromMe, config);
+      
+      const elapsed = Date.now() - startTime;
+      this.logger.log(`Chatwoot: Mensagem processada em ${elapsed}ms para conversa ${conversation.id}`);
     } catch (error: any) {
       this.logger.error(`Erro ao processar mensagem Chatwoot: ${error.message}`);
+      if (error.response?.data) {
+        this.logger.error(`Chatwoot API Error: ${JSON.stringify(error.response.data)}`);
+      }
     }
+  }
+
+  // Cache helpers
+  private getCachedInbox(instanceId: string): number | null {
+    const cached = this.inboxes.get(instanceId);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.id;
+    }
+    return null;
+  }
+
+  private setCachedInbox(instanceId: string, id: number) {
+    this.inboxes.set(instanceId, { id, timestamp: Date.now() });
+  }
+
+  private getCachedContact(key: string): ChatwootContact | null {
+    const cached = this.contacts.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  private setCachedContact(key: string, data: ChatwootContact) {
+    this.contacts.set(key, { data, timestamp: Date.now() });
+  }
+
+  private getCachedConversation(key: string): ChatwootConversation | null {
+    const cached = this.conversations.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  private setCachedConversation(key: string, data: ChatwootConversation) {
+    this.conversations.set(key, { data, timestamp: Date.now() });
   }
 
 

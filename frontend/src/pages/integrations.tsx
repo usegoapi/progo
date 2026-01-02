@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
+import Swal from 'sweetalert2';
 
 interface Integration {
   id: string;
@@ -59,7 +60,6 @@ export default function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [activeTab, setActiveTab] = useState('typebot');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
 
   // Typebot State
   const [typebot, setTypebot] = useState({
@@ -148,7 +148,7 @@ export default function Integrations() {
 
   const saveIntegration = async (type: string) => {
     setLoading(true);
-    setMessage('');
+    
     try {
       let payload = {};
 
@@ -160,11 +160,248 @@ export default function Integrations() {
         payload = { ...chatwoot };
       }
 
-      await api.post(`/integrations/${type}`, payload);
-      setMessage('Configuração salva com sucesso!');
+      const { data } = await api.post(`/integrations/${type}`, payload);
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Sucesso!',
+        text: data.message || 'Configuração salva com sucesso!',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#22c55e',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+      
       loadIntegrations();
-    } catch {
-      setMessage('Erro ao salvar configuração');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Erro ao salvar configuração';
+      
+      await Swal.fire({
+        icon: 'error',
+        title: 'Erro na Configuração',
+        text: errorMessage,
+        confirmButtonText: 'Entendi',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#ef4444',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+    }
+    setLoading(false);
+  };
+
+  const testChatwootConnection = async () => {
+    if (!chatwoot.url || !chatwoot.accountId || !chatwoot.token) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Campos Obrigatórios',
+        text: 'Preencha URL, Account ID e Token para testar a conexão',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#f59e0b',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data } = await api.post('/integrations/chatwoot/test', chatwoot);
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Conexão OK!',
+        html: `
+          <p class="mb-2">${data.message}</p>
+          ${data.inboxes?.length > 0 ? `
+            <div class="text-left mt-4 p-3 bg-[#2a2a2a] rounded-lg">
+              <p class="text-sm text-gray-400 mb-2">Inboxes encontradas:</p>
+              <ul class="text-sm">
+                ${data.inboxes.map((i: any) => `<li class="text-white">• ${i.name} (ID: ${i.id})</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        `,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#22c55e',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+          htmlContainer: 'text-gray-300',
+        },
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Erro ao testar conexão';
+      
+      await Swal.fire({
+        icon: 'error',
+        title: 'Falha na Conexão',
+        text: errorMessage,
+        confirmButtonText: 'Entendi',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#ef4444',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+    }
+    setLoading(false);
+  };
+
+  const testTypebotConnection = async () => {
+    if (!typebot.apiUrl || !typebot.publicName) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Campos Obrigatórios',
+        text: 'Preencha API URL e Public Name para testar a conexão',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#f59e0b',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data } = await api.post('/integrations/typebot/test', typebot);
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Conexão OK!',
+        html: `
+          <p class="mb-2">${data.message}</p>
+          ${data.typebot ? `
+            <div class="text-left mt-4 p-3 bg-[#2a2a2a] rounded-lg">
+              <p class="text-sm text-gray-400 mb-2">Detalhes do Bot:</p>
+              <ul class="text-sm">
+                <li class="text-white">• Nome: ${data.typebot.name || 'N/A'}</li>
+                <li class="text-white">• Public ID: ${data.typebot.publicId || 'N/A'}</li>
+              </ul>
+            </div>
+          ` : ''}
+        `,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#22c55e',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+          htmlContainer: 'text-gray-300',
+        },
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Erro ao testar conexão';
+      
+      await Swal.fire({
+        icon: 'error',
+        title: 'Falha na Conexão',
+        text: errorMessage,
+        confirmButtonText: 'Entendi',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#ef4444',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+    }
+    setLoading(false);
+  };
+
+  const testN8nConnection = async () => {
+    if (!n8n.webhookUrl) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Campo Obrigatório',
+        text: 'Preencha a Webhook URL para testar a conexão',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#f59e0b',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data } = await api.post('/integrations/n8n/test', n8n);
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Conexão OK!',
+        html: `
+          <p class="mb-2">${data.message}</p>
+          ${data.response ? `
+            <div class="text-left mt-4 p-3 bg-[#2a2a2a] rounded-lg">
+              <p class="text-sm text-gray-400 mb-2">Resposta do Webhook:</p>
+              <p class="text-sm text-white">Status: ${data.response.status}</p>
+              ${data.response.data ? `<p class="text-xs text-gray-400 mt-2 break-all">${JSON.stringify(data.response.data).substring(0, 200)}...</p>` : ''}
+            </div>
+          ` : ''}
+        `,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#22c55e',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+          htmlContainer: 'text-gray-300',
+        },
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Erro ao testar conexão';
+      
+      await Swal.fire({
+        icon: 'error',
+        title: 'Falha na Conexão',
+        text: errorMessage,
+        confirmButtonText: 'Entendi',
+        confirmButtonColor: '#d4a843',
+        background: '#1a1a1a',
+        color: '#fff',
+        iconColor: '#ef4444',
+        customClass: {
+          popup: 'rounded-xl border border-[#2a2a2a]',
+          confirmButton: 'rounded-lg font-semibold',
+        },
+      });
     }
     setLoading(false);
   };
@@ -194,7 +431,7 @@ export default function Integrations() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setMessage(''); }}
+                onClick={() => { setActiveTab(tab.id); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                   activeTab === tab.id ? 'bg-primary/10 text-primary border border-primary/20' : 'text-slate-400 hover:bg-surface-light hover:text-white'
                 }`}
@@ -209,11 +446,6 @@ export default function Integrations() {
 
         {/* Config Panel */}
         <div className="lg:col-span-3 rounded-2xl border border-border-dark bg-surface-dark p-6">
-          {message && (
-            <div className={`mb-6 p-4 rounded-lg text-sm ${message.includes('Erro') ? 'bg-danger/10 text-danger border border-danger/20' : 'bg-success/10 text-success border border-success/20'}`}>
-              {message}
-            </div>
-          )}
 
           {/* TYPEBOT */}
           {activeTab === 'typebot' && (
@@ -299,9 +531,14 @@ export default function Integrations() {
                 </div>
               </div>
 
-              <button onClick={() => saveIntegration('typebot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
-                {loading ? 'Salvando...' : 'Salvar Configuração'}
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => saveIntegration('typebot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
+                  {loading ? 'Salvando...' : 'Salvar Configuração'}
+                </button>
+                <button onClick={testTypebotConnection} disabled={loading} className="px-6 py-3 bg-surface-light hover:bg-[#3a3a3a] text-white font-bold rounded-lg transition-all disabled:opacity-50 border border-border-dark">
+                  {loading ? 'Testando...' : 'Testar Conexão'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -401,9 +638,14 @@ export default function Integrations() {
                 </div>
               </div>
 
-              <button onClick={() => saveIntegration('n8n')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
-                {loading ? 'Salvando...' : 'Salvar Configuração'}
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => saveIntegration('n8n')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
+                  {loading ? 'Salvando...' : 'Salvar Configuração'}
+                </button>
+                <button onClick={testN8nConnection} disabled={loading} className="px-6 py-3 bg-surface-light hover:bg-[#3a3a3a] text-white font-bold rounded-lg transition-all disabled:opacity-50 border border-border-dark">
+                  {loading ? 'Testando...' : 'Testar Conexão'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -474,9 +716,14 @@ export default function Integrations() {
                 </div>
               </div>
 
-              <button onClick={() => saveIntegration('chatwoot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
-                {loading ? 'Salvando...' : 'Salvar Configuração'}
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => saveIntegration('chatwoot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
+                  {loading ? 'Salvando...' : 'Salvar Configuração'}
+                </button>
+                <button onClick={testChatwootConnection} disabled={loading} className="px-6 py-3 bg-surface-light hover:bg-[#3a3a3a] text-white font-bold rounded-lg transition-all disabled:opacity-50 border border-border-dark">
+                  {loading ? 'Testando...' : 'Testar Conexão'}
+                </button>
+              </div>
             </div>
           )}
         </div>
