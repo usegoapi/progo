@@ -13,6 +13,8 @@ import {
   NestMiddleware,
   MiddlewareConsumer,
   NestModule,
+  Controller,
+  Get,
 } from '@nestjs/common';
 import { LicenseValidator, LicenseStatus } from './LicenseValidator';
 
@@ -47,6 +49,11 @@ export class LicenseService implements OnModuleInit {
     return this.validator.validate();
   }
 
+  // Força verificação com servidor (ignora cache)
+  async forceValidate(): Promise<boolean> {
+    return this.validator.validate(true);
+  }
+
   isBlocked(): boolean {
     return this.validator.isLicenseBlocked();
   }
@@ -69,7 +76,10 @@ export class LicenseMiddleware implements NestMiddleware {
   constructor(private licenseService: LicenseService) {}
 
   async use(req: any, res: any, next: () => void) {
-    if (this.licenseService.isBlocked()) {
+    // SEMPRE força verificação com servidor
+    const isValid = await this.licenseService.forceValidate();
+
+    if (!isValid || this.licenseService.isBlocked()) {
       return res.status(403).json({
         error: 'LICENSE_BLOCKED',
         message: 'Licença bloqueada',
@@ -82,24 +92,48 @@ export class LicenseMiddleware implements NestMiddleware {
   }
 }
 
-const licenseServiceFactory = {
-  provide: LicenseService,
-  useFactory: (opts: LicenseModuleOptions) => new LicenseService(opts),
-  inject: ['LICENSE_OPTIONS'],
-};
+// Controller para verificar status da licença
+@Controller('license')
+export class LicenseController {
+  constructor(private licenseService: LicenseService) {}
+
+  @Get('check')
+  async check() {
+    // SEMPRE força verificação com servidor
+    const isValid = await this.licenseService.forceValidate();
+
+    if (!isValid || this.licenseService.isBlocked()) {
+      return {
+        error: 'LICENSE_BLOCKED',
+        message: 'Licença bloqueada',
+        reason: this.licenseService.getBlockReason(),
+        blocked: true,
+        status: this.licenseService.getStatus(),
+      };
+    }
+
+    return {
+      success: true,
+      blocked: false,
+      status: this.licenseService.getStatus(),
+    };
+  }
+}
 
 @Global()
 @Module({})
 export class LicenseModule implements NestModule {
   static forRoot(options: LicenseModuleOptions): DynamicModule {
+    const licenseServiceProvider = {
+      provide: LicenseService,
+      useFactory: () => new LicenseService(options),
+    };
+
     return {
       module: LicenseModule,
+      controllers: [LicenseController],
       providers: [
-        {
-          provide: 'LICENSE_OPTIONS',
-          useValue: options,
-        },
-        licenseServiceFactory,
+        licenseServiceProvider,
         {
           provide: LicenseMiddleware,
           useFactory: (licenseService: LicenseService) => new LicenseMiddleware(licenseService),
@@ -111,6 +145,9 @@ export class LicenseModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LicenseMiddleware).exclude('health', 'health/(.*)').forRoutes('*');
+    consumer
+      .apply(LicenseMiddleware)
+      .exclude('health', 'health/(.*)', 'license/check')
+      .forRoutes('*');
   }
 }

@@ -8,7 +8,7 @@ import api from '@/lib/api';
 
 const publicPages = ['/login', '/', '/qr/[token]', '/blocked'];
 
-// Componente de tela de bloqueio
+// Componente de tela de bloqueio - mesmo estilo da página de login
 function BlockedScreen({ reason }: { reason: string }) {
   const [countdown, setCountdown] = useState(30);
 
@@ -26,78 +26,102 @@ function BlockedScreen({ reason }: { reason: string }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0d0d0d] via-[#1a0a0a] to-[#0d0d0d] flex items-center justify-center p-4">
-      <div className="max-w-lg w-full">
-        {/* Ícone animado */}
-        <div className="flex justify-center mb-8">
-          <div className="relative">
-            <div className="w-32 h-32 bg-red-500/20 rounded-full flex items-center justify-center animate-pulse">
-              <div className="w-24 h-24 bg-red-500/30 rounded-full flex items-center justify-center">
-                <svg className="w-16 h-16 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-            </div>
-            <div className="absolute inset-0 w-32 h-32 bg-red-500/10 rounded-full animate-ping" />
-          </div>
+    <div className="flex min-h-screen">
+      {/* Lado esquerdo - Branding */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#0d0d0d] flex-col justify-center px-16 xl:px-24 relative overflow-hidden">
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -top-32 -right-32 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+
+        <div className="relative z-10 mb-8">
+          <img src="/img/logosite.png" alt="GO-API Logo" className="h-12 w-auto" />
         </div>
 
-        {/* Card */}
-        <div className="bg-[#1a1a1a]/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-red-500/30 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4">
-            <div className="flex items-center justify-center gap-3">
-              <img src="/img/icone.png" alt="GO-API" className="w-8 h-8" />
-              <h1 className="text-2xl font-bold text-white">Acesso Bloqueado</h1>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="p-6 space-y-6">
-            <div className="text-center">
-              <p className="text-gray-300 text-lg mb-2">
-                Sua licença foi bloqueada ou é inválida.
-              </p>
-              <p className="text-red-400 font-medium">{reason}</p>
-            </div>
-
-            {/* Countdown */}
-            <div className="space-y-3">
-              <p className="text-center text-gray-400 text-sm">
-                Verificando novamente em <span className="text-[#d4a843] font-bold">{countdown}s</span>
-              </p>
-              <div className="w-full bg-[#2a2a2a] rounded-full h-2">
-                <div
-                  className="bg-[#d4a843] h-2 rounded-full transition-all duration-1000"
-                  style={{ width: `${(countdown / 30) * 100}%` }}
-                />
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="w-full bg-gradient-to-r from-[#d4a843] to-[#b8922e] hover:from-[#e0b44d] hover:to-[#c9a33a] text-[#0d0d0d] font-bold py-3 px-4 rounded-xl transition-all duration-200"
-              >
-                Tentar Novamente
-              </button>
-            </div>
-
-            {/* Contato */}
-            <div className="border-t border-[#2a2a2a] pt-4">
-              <p className="text-center text-gray-500 text-sm">
-                Precisa de ajuda? Entre em contato:
-              </p>
-              <a
-                href="mailto:suporte@usego.com.br"
-                className="block text-center text-[#d4a843] hover:text-[#e0b44d] font-medium mt-1"
-              >
-                suporte@usego.com.br
-              </a>
-            </div>
-          </div>
+        <div className="relative z-10">
+          <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
+            Acesso<br /><span className="text-primary">temporariamente</span><br />suspenso.
+          </h1>
+          <p className="text-gray-400 text-lg max-w-md">
+            Sua licença precisa ser verificada ou renovada para continuar utilizando a plataforma.
+          </p>
         </div>
 
-        <p className="text-center text-gray-600 text-sm mt-6">
-          GO-API © {new Date().getFullYear()}
-        </p>
+        <div className="relative z-10 flex gap-2 mt-12">
+          <div className="w-2 h-2 rounded-full bg-red-500" />
+          <div className="w-2 h-2 rounded-full bg-gray-600" />
+          <div className="w-2 h-2 rounded-full bg-gray-600" />
+          <div className="w-2 h-2 rounded-full bg-gray-600" />
+        </div>
+      </div>
+
+      {/* Lado direito - Card de bloqueio */}
+      <div className="w-full lg:w-1/2 bg-[#121212] flex items-center justify-center p-8">
+        <div className="w-full max-w-md">
+          {/* Logo mobile */}
+          <div className="lg:hidden flex justify-center mb-8">
+            <img src="/img/logosite.png" alt="GO-API Logo" className="h-10 w-auto" />
+          </div>
+
+          {/* Ícone de bloqueio */}
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-4xl text-red-500">lock</span>
+            </div>
+          </div>
+
+          {/* Título */}
+          <div className="mb-6 text-center">
+            <h2 className="text-2xl font-bold text-white mb-2">Licença Bloqueada</h2>
+            <p className="text-gray-500">Sua licença foi suspensa ou expirou</p>
+          </div>
+
+          {/* Motivo */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-red-500 mt-0.5">error</span>
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Motivo do bloqueio:</p>
+                <p className="text-white font-medium">{reason}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Countdown */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-500 text-sm">Verificando novamente em</span>
+              <span className="text-primary font-bold">{countdown}s</span>
+            </div>
+            <div className="w-full bg-[#1a1a1a] rounded-full h-2">
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-1000"
+                style={{ width: `${(countdown / 30) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Botão */}
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full h-14 bg-primary hover:bg-primary-hover text-black font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined">refresh</span>
+            Verificar Novamente
+          </button>
+
+          {/* Contato */}
+          <div className="mt-8 pt-6 border-t border-[#2a2a2a]">
+            <p className="text-center text-gray-500 text-sm mb-2">
+              Precisa de ajuda com sua licença?
+            </p>
+            <a
+              href="mailto:suporte@usego.com.br"
+              className="flex items-center justify-center gap-2 text-primary hover:text-primary-hover transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">mail</span>
+              suporte@usego.com.br
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -116,10 +140,16 @@ export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     const checkLicense = async () => {
       try {
-        // Usar endpoint /status que passa pelo middleware de licença
-        await api.get('/status');
-        // Se chegou aqui, licença está OK
-        setLicenseBlocked(false);
+        // Usar endpoint /license/check que verifica a licença
+        const response = await api.get('/license/check');
+        const data = response.data;
+        
+        if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
+          setLicenseBlocked(true);
+          setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+        } else {
+          setLicenseBlocked(false);
+        }
       } catch (err: any) {
         // Verificar se é erro de licença
         if (err.response?.status === 403) {
@@ -137,8 +167,8 @@ export default function App({ Component, pageProps }: AppProps) {
 
     checkLicense();
 
-    // Verificar licença periodicamente (a cada 15 segundos)
-    const interval = setInterval(checkLicense, 15000);
+    // Verificar licença periodicamente (a cada 10 segundos)
+    const interval = setInterval(checkLicense, 10000);
     return () => clearInterval(interval);
   }, []);
 
