@@ -125,6 +125,10 @@ export class LicenseValidator {
       .update(`${this.apiKey}${timestamp}`)
       .digest('hex');
 
+    console.log(`🔍 Requisição para: ${url}`);
+    console.log(`🔍 API Key: ${this.apiKey.substring(0, 8)}...`);
+    console.log(`🔍 Machine ID: ${this.machineId}`);
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -138,14 +142,24 @@ export class LicenseValidator {
         signal: AbortSignal.timeout(10000)
       });
 
+      const responseText = await response.text();
+      console.log(`🔍 Response status: ${response.status}`);
+      console.log(`🔍 Response body: ${responseText}`);
+
       if (!response.ok) {
-        this.error = `HTTP ${response.status}`;
+        this.error = `HTTP ${response.status}: ${responseText}`;
         return null;
       }
 
-      return await response.json();
+      try {
+        return JSON.parse(responseText);
+      } catch {
+        this.error = `Resposta inválida: ${responseText}`;
+        return null;
+      }
     } catch (err) {
       this.error = `Erro de conexão: ${err instanceof Error ? err.message : 'unknown'}`;
+      console.log(`🔍 Erro: ${this.error}`);
       return null;
     }
   }
@@ -235,6 +249,7 @@ export class LicenseValidator {
 
     // Obter IP público
     this.ip = await this.getPublicIp();
+    console.log(`🔍 IP público: ${this.ip}`);
 
     // Validar com servidor
     const response = await this.request('/api/license/validate', {
@@ -251,6 +266,16 @@ export class LicenseValidator {
       }
 
       this.error = response.reason || 'Licença inválida';
+      
+      // Se a licença não está ativa, tentar ativar
+      if (response.status !== 'active') {
+        console.log('🔄 Tentando ativar licença...');
+        const activated = await this.activate();
+        if (activated) {
+          return true;
+        }
+      }
+      
       return false;
     }
 
