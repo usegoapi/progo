@@ -60,6 +60,11 @@ export class LicenseValidator {
    * Obter Machine ID único
    */
   private getMachineId(): string {
+    // Primeiro: verificar variável de ambiente (para Docker)
+    if (process.env.MACHINE_ID) {
+      return process.env.MACHINE_ID;
+    }
+
     // Tentar ler machine-id do Linux
     const machineIdPaths = ['/etc/machine-id', '/var/lib/dbus/machine-id'];
     
