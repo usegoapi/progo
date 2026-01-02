@@ -85,8 +85,24 @@ export class ChatwootService implements OnModuleInit {
 
   async processMessage(instanceId: string, remoteJid: string, message: string, fromMe: boolean) {
     try {
-      // Ignorar grupos e status
-      if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') return;
+      // Ignorar grupos, status e newsletters (não têm número de telefone válido)
+      if (
+        remoteJid.endsWith('@g.us') || 
+        remoteJid === 'status@broadcast' ||
+        remoteJid.endsWith('@newsletter') ||
+        remoteJid.endsWith('@broadcast') ||
+        remoteJid.endsWith('@lid')
+      ) {
+        this.logger.debug(`Chatwoot: Ignorando JID não suportado: ${remoteJid}`);
+        return;
+      }
+
+      // Validar se o JID tem formato de número de telefone válido
+      const phoneNumber = remoteJid.split('@')[0];
+      if (!/^\d{10,15}$/.test(phoneNumber)) {
+        this.logger.debug(`Chatwoot: Ignorando JID com número inválido: ${remoteJid}`);
+        return;
+      }
 
       const instance = await this.prisma.instance.findUnique({
         where: { id: instanceId },
