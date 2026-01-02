@@ -411,11 +411,26 @@ export class LicenseValidator {
 
   async validateOrDie(): Promise<void> {
     console.log('🔐 Validando licença...');
+    
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!this.apiKey || this.apiKey === '') {
+      console.warn('⚠️ LICENSE_KEY não configurada - sistema funcionando sem validação de licença');
+      return;
+    }
+    
+    if (!this.serverUrl || this.serverUrl === '') {
+      console.warn('⚠️ LICENSE_SERVER não configurado - sistema funcionando sem validação de licença');
+      return;
+    }
+    
     const isValid = await this.validate();
 
     if (!isValid) {
       console.error('❌ Licença inválida ou bloqueada');
-      process.exit(1);
+      // NÃO mata o processo - apenas marca como bloqueado
+      // O middleware vai bloquear as requisições
+      this.block(this.error || 'Licença inválida');
+      return;
     }
 
     console.log('✅ Licença válida');

@@ -47,25 +47,6 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Se licença bloqueada (403 com LICENSE_BLOCKED), redirecionar para página de bloqueio
-    if (error.response?.status === 403 && typeof window !== 'undefined') {
-      const data = error.response?.data;
-      
-      if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
-        const params = new URLSearchParams({
-          reason: data?.reason || data?.message || 'Licença bloqueada',
-          machineId: data?.status?.machineId || '',
-          ip: data?.status?.ip || ''
-        });
-        
-        // Redirecionar para página de bloqueio
-        if (!window.location.pathname.includes('/blocked')) {
-          window.location.href = `/blocked?${params.toString()}`;
-        }
-        return Promise.reject(error);
-      }
-    }
-
     // Se 401, limpar token e redirecionar para login
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('goapi_token');

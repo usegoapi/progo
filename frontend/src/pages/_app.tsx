@@ -1,10 +1,11 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '@/store/auth';
 import api from '@/lib/api';
+import Swal from 'sweetalert2';
 
 const publicPages = ['/login', '/', '/qr/[token]', '/blocked'];
 
@@ -20,20 +21,33 @@ function BlockedScreen({
   const [countdown, setCountdown] = useState(30);
   const [checking, setChecking] = useState(false);
 
-  const handleCheck = async () => {
+  const handleCheck = useCallback(async () => {
     setChecking(true);
     try {
       const isUnblocked = await onCheckLicense();
       if (isUnblocked) {
-        // Licença foi liberada - mostrar alerta e redirecionar
-        alert('✅ Licença liberada! Redirecionando para o login...');
+        // Licença foi liberada - mostrar SweetAlert e redirecionar
+        await Swal.fire({
+          icon: 'success',
+          title: 'Licença Liberada!',
+          text: 'Sua licença foi reativada com sucesso.',
+          confirmButtonText: 'Ir para Login',
+          confirmButtonColor: '#d4a843',
+          background: '#1a1a1a',
+          color: '#fff',
+          iconColor: '#d4a843',
+          customClass: {
+            popup: 'rounded-xl border border-[#2a2a2a]',
+            confirmButton: 'rounded-lg font-semibold',
+          },
+        });
         router.push('/login');
       }
     } finally {
       setChecking(false);
-      setCountdown(30); // Resetar countdown
+      setCountdown(30);
     }
-  };
+  }, [onCheckLicense, router]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -46,7 +60,7 @@ function BlockedScreen({
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [handleCheck]);
 
   return (
     <div className="flex min-h-screen">
@@ -171,44 +185,44 @@ export default function App({ Component, pageProps }: AppProps) {
   const [licenseBlocked, setLicenseBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [checkingLicense, setCheckingLicense] = useState(true);
+  const [wasBlocked, setWasBlocked] = useState(false);
 
   // Função para verificar licença - retorna true se foi desbloqueada
-  const checkLicense = async (): Promise<boolean> => {
+  const checkLicense = useCallback(async (): Promise<boolean> => {
     try {
-      console.log('🔍 Verificando licença...');
       const response = await api.get('/license/check');
       const data = response.data;
-      console.log('🔍 Resposta:', data);
 
       if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
-        console.log('🚫 Licença bloqueada!');
         setLicenseBlocked(true);
         setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
         return false;
       } else {
-        console.log('✅ Licença OK');
+        // Licença OK
+        const previouslyBlocked = licenseBlocked;
         setLicenseBlocked(false);
         setBlockReason('');
-        return true; // Licença liberada!
+        return previouslyBlocked; // Retorna true se estava bloqueado antes
       }
     } catch (err: any) {
-      console.log('🔍 Erro na verificação:', err.response?.status, err.response?.data);
       if (err.response?.status === 403) {
         const data = err.response?.data;
         if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
-          console.log('🚫 Licença bloqueada (403)!');
           setLicenseBlocked(true);
           setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
           return false;
         }
       }
-      // Outros erros - não alterar estado
+      // Erro 404 ou outros - não bloquear, apenas logar
+      console.warn('Erro ao verificar licença:', err.response?.status);
       return false;
     }
-  };
+  }, [licenseBlocked]);
 
-  // Verificar licença ao carregar
+  // Verificar licença ao carregar e periodicamente
   useEffect(() => {
+    let interval: NodeJS.Timeout;
+
     const initialCheck = async () => {
       await checkLicense();
       setCheckingLicense(false);
@@ -217,19 +231,87 @@ export default function App({ Component, pageProps }: AppProps) {
     initialCheck();
 
     // Verificar licença periodicamente (a cada 10 segundos)
-    const interval = setInterval(async () => {
-      const wasBlocked = licenseBlocked;
-      const isNowUnblocked = await checkLicense();
+    interval = setInterval(async () => {
+      const previouslyBlocked = licenseBlocked;
       
-      // Se estava bloqueado e agora foi liberado, redirecionar
-      if (wasBlocked && isNowUnblocked) {
-        alert('✅ Licença liberada! Redirecionando para o login...');
-        router.push('/login');
+      try {
+        const response = await api.get('/license/check');
+        const data = response.data;
+
+        if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
+          if (!previouslyBlocked) {
+            // Acabou de ser bloqueado - mostrar alerta
+            Swal.fire({
+              icon: 'error',
+              title: 'Licença Bloqueada',
+              text: data?.reason || 'Sua licença foi bloqueada.',
+              confirmButtonText: 'Entendi',
+              confirmButtonColor: '#d4a843',
+              background: '#1a1a1a',
+              color: '#fff',
+              iconColor: '#ef4444',
+              customClass: {
+                popup: 'rounded-xl border border-[#2a2a2a]',
+                confirmButton: 'rounded-lg font-semibold',
+              },
+            });
+          }
+          setLicenseBlocked(true);
+          setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+        } else {
+          // Licença OK
+          if (previouslyBlocked) {
+            // Foi desbloqueado - mostrar alerta e redirecionar
+            await Swal.fire({
+              icon: 'success',
+              title: 'Licença Liberada!',
+              text: 'Sua licença foi reativada com sucesso.',
+              confirmButtonText: 'Ir para Login',
+              confirmButtonColor: '#d4a843',
+              background: '#1a1a1a',
+              color: '#fff',
+              iconColor: '#d4a843',
+              customClass: {
+                popup: 'rounded-xl border border-[#2a2a2a]',
+                confirmButton: 'rounded-lg font-semibold',
+              },
+            });
+            router.push('/login');
+          }
+          setLicenseBlocked(false);
+          setBlockReason('');
+        }
+      } catch (err: any) {
+        if (err.response?.status === 403) {
+          const data = err.response?.data;
+          if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
+            if (!previouslyBlocked) {
+              Swal.fire({
+                icon: 'error',
+                title: 'Licença Bloqueada',
+                text: data?.reason || 'Sua licença foi bloqueada.',
+                confirmButtonText: 'Entendi',
+                confirmButtonColor: '#d4a843',
+                background: '#1a1a1a',
+                color: '#fff',
+                iconColor: '#ef4444',
+                customClass: {
+                  popup: 'rounded-xl border border-[#2a2a2a]',
+                  confirmButton: 'rounded-lg font-semibold',
+                },
+              });
+            }
+            setLicenseBlocked(true);
+            setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+          }
+        }
       }
     }, 10000);
 
-    return () => clearInterval(interval);
-  }, [licenseBlocked]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [licenseBlocked, router]);
 
   useEffect(() => {
     loadUser();

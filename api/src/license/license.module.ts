@@ -145,9 +145,17 @@ export class LicenseModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer) {
+    // Excluir rotas que não precisam de verificação de licença
     consumer
       .apply(LicenseMiddleware)
-      .exclude('health', 'health/(.*)', 'license/check')
+      .exclude(
+        'health',
+        'health/(.*)',
+        'license',
+        'license/(.*)',
+        'license/check',
+        'status',
+      )
       .forRoutes('*');
   }
 }
