@@ -1,9 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { LicenseService } from './license.module';
 
 @Controller('license')
 export class LicenseController {
-  constructor(private licenseService: LicenseService) {}
+  constructor(
+    @Inject(LicenseService) private licenseService: LicenseService,
+  ) {}
 
   @Get('status')
   async getStatus() {
