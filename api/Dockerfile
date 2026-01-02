@@ -1,6 +1,6 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache curl git python3 make g++ openssl
+RUN apk add --no-cache curl git python3 make g++ openssl ffmpeg
 
 WORKDIR /app
 

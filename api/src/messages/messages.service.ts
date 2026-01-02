@@ -8,6 +8,11 @@ import {
 } from './dto/message.dto';
 import * as https from 'https';
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import * as ffmpeg from 'fluent-ffmpeg';
+import * as ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
 @Injectable()
 export class MessagesService {
@@ -16,7 +21,10 @@ export class MessagesService {
   constructor(
     private prisma: PrismaService,
     private baileys: BaileysService,
-  ) {}
+  ) {
+    // Configurar ffmpeg path
+    ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+  }
 
   // Helper para baixar mídia de URL com tratamento de erros
   private async downloadMedia(url: string): Promise<Buffer> {
@@ -49,6 +57,44 @@ export class MessagesService {
         response.on('end', () => resolve(Buffer.concat(chunks)));
         response.on('error', reject);
       }).on('error', reject).on('timeout', () => reject(new Error('Download timeout')));
+    });
+  }
+
+  // Converter áudio para OGG Opus (formato compatível com WhatsApp PTT em todos os dispositivos)
+  private async convertToOggOpus(inputBuffer: Buffer): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const tempDir = os.tmpdir();
+      const inputPath = path.join(tempDir, `input_${Date.now()}.tmp`);
+      const outputPath = path.join(tempDir, `output_${Date.now()}.ogg`);
+
+      // Salvar buffer de entrada em arquivo temporário
+      fs.writeFileSync(inputPath, inputBuffer);
+
+      ffmpeg(inputPath)
+        .audioCodec('libopus')
+        .audioFrequency(48000)
+        .audioChannels(1)
+        .audioBitrate('64k')
+        .format('ogg')
+        .on('error', (err) => {
+          this.logger.error(`FFmpeg error: ${err.message}`);
+          // Limpar arquivos temporários
+          try { fs.unlinkSync(inputPath); } catch {}
+          try { fs.unlinkSync(outputPath); } catch {}
+          reject(err);
+        })
+        .on('end', () => {
+          try {
+            const outputBuffer = fs.readFileSync(outputPath);
+            // Limpar arquivos temporários
+            fs.unlinkSync(inputPath);
+            fs.unlinkSync(outputPath);
+            resolve(outputBuffer);
+          } catch (err) {
+            reject(err);
+          }
+        })
+        .save(outputPath);
     });
   }
 
@@ -130,31 +176,33 @@ export class MessagesService {
     const to = this.formatPhone(dto.to);
     
     try {
-      // Baixar o áudio e enviar como buffer com mimetype correto para PTT
+      // Baixar o áudio
       const audioBuffer = await this.downloadMedia(dto.audioUrl);
       
-      // Para PTT (voice note), o WhatsApp requer audio/ogg com codec opus
-      // Mas também aceita audio/mp4 se o arquivo for compatível
-      const mimetype = dto.ptt !== false ? 'audio/ogg; codecs=opus' : this.getMimeType(dto.audioUrl, 'audio');
+      let finalBuffer: Buffer;
+      let mimetype: string;
+      
+      if (dto.ptt !== false) {
+        // Para PTT (voice note), converter para OGG Opus - formato obrigatório para Android/iOS
+        this.logger.log('Convertendo áudio para OGG Opus (PTT)...');
+        finalBuffer = await this.convertToOggOpus(audioBuffer);
+        mimetype = 'audio/ogg; codecs=opus';
+      } else {
+        // Para áudio normal (não PTT), usar o formato original
+        finalBuffer = audioBuffer;
+        mimetype = this.getMimeType(dto.audioUrl, 'audio');
+      }
       
       await socket.sendMessage(to, { 
-        audio: audioBuffer, 
+        audio: finalBuffer, 
         mimetype,
-        ptt: dto.ptt !== false, // default true
+        ptt: dto.ptt !== false,
       });
-    } catch (downloadError) {
-      this.logger.warn(`Audio download failed, trying direct URL: ${downloadError.message}`);
-      try {
-        // Fallback: enviar por URL (pode não funcionar em todos os dispositivos)
-        await socket.sendMessage(to, { 
-          audio: { url: dto.audioUrl }, 
-          mimetype: 'audio/ogg; codecs=opus',
-          ptt: dto.ptt !== false,
-        });
-      } catch (urlError) {
-        this.logger.error(`Failed to send audio: ${urlError.message}`);
-        throw new BadRequestException(`Não foi possível enviar o áudio. Verifique se a URL é acessível e o formato é compatível (mp3, ogg, m4a): ${dto.audioUrl}`);
-      }
+      
+      this.logger.log(`Áudio enviado com sucesso para ${dto.to}`);
+    } catch (error) {
+      this.logger.error(`Erro ao enviar áudio: ${error.message}`);
+      throw new BadRequestException(`Não foi possível enviar o áudio. Erro: ${error.message}`);
     }
     
     return this.saveMessage(dto.instanceId, dto.to, 'AUDIO', { audioUrl: dto.audioUrl });
