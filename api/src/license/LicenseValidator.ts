@@ -1,17 +1,11 @@
 /**
  * License Validator para NestJS/Node.js
  * 
- * Valida a licença com o servidor GO-API central.
- * Bloqueia a API se a licença for inválida.
- * 
- * USO no main.ts:
- * import { LicenseValidator } from './license/LicenseValidator';
- * 
- * async function bootstrap() {
- *   const license = new LicenseValidator(process.env.LICENSE_SERVER, process.env.LICENSE_KEY);
- *   await license.validateOrDie();
- *   // ... resto do bootstrap
- * }
+ * Sistema de proteção de licença com:
+ * - Verificação em tempo real (sem cache quando bloqueado)
+ * - Detecção de fraude
+ * - Bloqueio imediato
+ * - Logs seguros (sem dados sensíveis)
  */
 
 import * as fs from 'fs';
@@ -26,10 +20,21 @@ interface LicenseResponse {
   expires_at?: string;
   check_interval?: number;
   requests_remaining?: number;
+  blocked?: boolean;
+  fraud_detected?: boolean;
 }
 
 interface CacheData extends LicenseResponse {
   cached_at: number;
+}
+
+export interface LicenseStatus {
+  valid: boolean;
+  blocked: boolean;
+  reason: string | null;
+  machineId: string;
+  ip: string;
+  expiresAt: string | null;
 }
 
 export class LicenseValidator {
@@ -39,9 +44,14 @@ export class LicenseValidator {
   private hostname: string;
   private ip: string = '0.0.0.0';
   private cacheDir: string;
-  private cacheTimeout: number = 300; // 5 minutos
-  private offlineTolerance: number = 1800; // 30 minutos
+  private cacheTimeout: number = 15; // 15 segundos - cache curto para segurança
+  private offlineTolerance: number = 60; // 1 minuto máximo offline (reduzido)
   private error: string | null = null;
+  private isBlocked: boolean = false;
+  private blockReason: string | null = null;
+  private checkIntervalId: NodeJS.Timeout | null = null;
+  private onBlockCallback: ((reason: string) => void) | null = null;
+  private lastServerCheck: number = 0;
 
   constructor(serverUrl: string, apiKey: string, cacheDir: string = '/app/license') {
     this.serverUrl = serverUrl.replace(/\/$/, '');
@@ -50,22 +60,16 @@ export class LicenseValidator {
     this.machineId = this.getMachineId();
     this.hostname = os.hostname();
 
-    // Criar diretório de cache
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
     }
   }
 
-  /**
-   * Obter Machine ID único
-   */
   private getMachineId(): string {
-    // Primeiro: verificar variável de ambiente (para Docker)
     if (process.env.MACHINE_ID) {
       return process.env.MACHINE_ID;
     }
 
-    // Tentar ler machine-id do Linux
     const machineIdPaths = ['/etc/machine-id', '/var/lib/dbus/machine-id'];
     
     for (const filePath of machineIdPaths) {
@@ -74,15 +78,11 @@ export class LicenseValidator {
       }
     }
 
-    // Fallback: gerar baseado em hostname + cpus
     const cpus = os.cpus();
     const data = `${os.hostname()}-${os.platform()}-${cpus[0]?.model || 'unknown'}`;
     return crypto.createHash('md5').update(data).digest('hex');
   }
 
-  /**
-   * Obter IP público
-   */
   private async getPublicIp(): Promise<string> {
     const services = [
       'https://api.ipify.org',
@@ -114,15 +114,8 @@ export class LicenseValidator {
     return ipv4Regex.test(ip);
   }
 
-  /**
-   * Fazer requisição ao servidor de licenças
-   */
   private async request(endpoint: string, data: object): Promise<LicenseResponse | null> {
     const url = `${this.serverUrl}${endpoint}`;
-
-    console.log(`🔍 Requisição para: ${url}`);
-    console.log(`🔍 API Key: ${this.apiKey.substring(0, 8)}...`);
-    console.log(`🔍 Machine ID: ${this.machineId}`);
 
     try {
       const response = await fetch(url, {
@@ -131,38 +124,38 @@ export class LicenseValidator {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
           'X-API-Key': this.apiKey,
-          'User-Agent': 'LicenseValidator/1.0 Node.js'
+          'User-Agent': 'LicenseValidator/2.0'
         },
         body: JSON.stringify(data),
         signal: AbortSignal.timeout(10000)
       });
 
       const responseText = await response.text();
-      console.log(`🔍 Response status: ${response.status}`);
-      console.log(`🔍 Response body: ${responseText}`);
 
       if (!response.ok) {
-        this.error = `HTTP ${response.status}: ${responseText}`;
+        this.error = `Erro na validação`;
         return null;
       }
 
       try {
         return JSON.parse(responseText);
       } catch {
-        this.error = `Resposta inválida: ${responseText}`;
+        this.error = `Resposta inválida do servidor`;
         return null;
       }
     } catch (err) {
-      this.error = `Erro de conexão: ${err instanceof Error ? err.message : 'unknown'}`;
-      console.log(`🔍 Erro: ${this.error}`);
+      this.error = `Erro de conexão com servidor de licenças`;
       return null;
     }
   }
 
-  /**
-   * Salvar cache
-   */
   private saveCache(data: LicenseResponse): void {
+    // NÃO salvar cache se estiver bloqueado
+    if (this.isBlocked || data.blocked || data.status === 'blocked') {
+      this.clearCache();
+      return;
+    }
+
     const cacheData: CacheData = {
       ...data,
       cached_at: Math.floor(Date.now() / 1000)
@@ -171,10 +164,12 @@ export class LicenseValidator {
     fs.writeFileSync(cachePath, JSON.stringify(cacheData), { mode: 0o600 });
   }
 
-  /**
-   * Carregar cache
-   */
   private loadCache(): CacheData | null {
+    // NUNCA usar cache se estiver bloqueado
+    if (this.isBlocked) {
+      return null;
+    }
+
     const cachePath = path.join(this.cacheDir, 'license.cache');
     if (!fs.existsSync(cachePath)) {
       return null;
@@ -182,31 +177,82 @@ export class LicenseValidator {
 
     try {
       const content = fs.readFileSync(cachePath, 'utf8');
-      return JSON.parse(content);
+      const cached = JSON.parse(content) as CacheData;
+      
+      // Verificar se o cache indica bloqueio
+      if (cached.blocked || cached.status === 'blocked') {
+        this.clearCache();
+        return null;
+      }
+      
+      return cached;
     } catch {
       return null;
     }
   }
 
-  /**
-   * Verificar se cache é válido
-   */
+  private clearCache(): void {
+    const cachePath = path.join(this.cacheDir, 'license.cache');
+    if (fs.existsSync(cachePath)) {
+      fs.unlinkSync(cachePath);
+    }
+  }
+
   private isCacheValid(cached: CacheData): boolean {
+    // Cache NUNCA é válido se bloqueado
+    if (this.isBlocked || cached.blocked || cached.status === 'blocked') {
+      return false;
+    }
+    
     const now = Math.floor(Date.now() / 1000);
     return (now - cached.cached_at) < this.cacheTimeout;
   }
 
-  /**
-   * Verificar tolerância offline
-   */
   private isWithinOfflineTolerance(cached: CacheData): boolean {
+    // Tolerância offline NUNCA se aplica se bloqueado
+    if (this.isBlocked || cached.blocked || cached.status === 'blocked') {
+      return false;
+    }
+    
     const now = Math.floor(Date.now() / 1000);
     return (now - cached.cached_at) < this.offlineTolerance;
   }
 
-  /**
-   * Ativar licença (primeira execução)
-   */
+  onBlock(callback: (reason: string) => void): this {
+    this.onBlockCallback = callback;
+    return this;
+  }
+
+  private block(reason: string): void {
+    this.isBlocked = true;
+    this.blockReason = reason;
+    this.clearCache(); // Limpar cache imediatamente
+    console.error(`🚫 Licença bloqueada`);
+    
+    if (this.onBlockCallback) {
+      this.onBlockCallback(reason);
+    }
+  }
+
+  isLicenseBlocked(): boolean {
+    return this.isBlocked;
+  }
+
+  getBlockReason(): string | null {
+    return this.blockReason;
+  }
+
+  getStatus(): LicenseStatus {
+    return {
+      valid: !this.isBlocked,
+      blocked: this.isBlocked,
+      reason: this.blockReason || this.error,
+      machineId: this.machineId.substring(0, 8) + '...', // Mascarar
+      ip: this.ip.split('.').slice(0, 2).join('.') + '.*.*', // Mascarar IP
+      expiresAt: null
+    };
+  }
+
   async activate(): Promise<boolean> {
     this.ip = await this.getPublicIp();
 
@@ -221,9 +267,19 @@ export class LicenseValidator {
       return false;
     }
 
+    if (response.fraud_detected) {
+      this.block('Fraude detectada');
+      return false;
+    }
+
+    if (response.blocked || response.status === 'blocked') {
+      this.block(response.reason || 'Licença bloqueada');
+      return false;
+    }
+
     if (response.success && response.status === 'active') {
       this.saveCache(response);
-      console.log('✅ Licença ativada com sucesso');
+      console.log('✅ Licença ativada');
       return true;
     }
 
@@ -232,21 +288,46 @@ export class LicenseValidator {
   }
 
   /**
-   * Validar licença
+   * Validar licença - SEMPRE verifica com servidor se bloqueado
    */
-  async validate(): Promise<boolean> {
-    // Verificar cache primeiro
-    const cached = this.loadCache();
-    if (cached && this.isCacheValid(cached)) {
-      console.log('✅ Licença válida (cache)');
-      return true;
+  async validate(forceCheck: boolean = false): Promise<boolean> {
+    // Se já está bloqueado, SEMPRE verificar com servidor (sem cache)
+    if (this.isBlocked) {
+      // Tentar desbloquear verificando com servidor
+      const response = await this.request('/api/license/validate', {
+        api_key: this.apiKey,
+        machine_id: this.machineId,
+        ip: this.ip || await this.getPublicIp()
+      });
+
+      if (response && response.success && response.status === 'active' && !response.blocked) {
+        // Licença foi desbloqueada no servidor
+        this.isBlocked = false;
+        this.blockReason = null;
+        this.saveCache(response);
+        console.log('✅ Licença reativada');
+        return true;
+      }
+      
+      return false; // Continua bloqueado
     }
 
-    // Obter IP público
-    this.ip = await this.getPublicIp();
-    console.log(`🔍 IP público: ${this.ip}`);
+    // Verificar cache apenas se não for forçado e não estiver bloqueado
+    if (!forceCheck) {
+      const cached = this.loadCache();
+      if (cached && this.isCacheValid(cached)) {
+        // Verificar se cache indica bloqueio
+        if (cached.blocked || cached.status === 'blocked') {
+          this.block(cached.reason || 'Licença bloqueada');
+          return false;
+        }
+        return true;
+      }
+    }
 
-    // Validar com servidor
+    this.ip = await this.getPublicIp();
+    this.lastServerCheck = Date.now();
+
     const response = await this.request('/api/license/validate', {
       api_key: this.apiKey,
       machine_id: this.machineId,
@@ -254,103 +335,143 @@ export class LicenseValidator {
     });
 
     if (response) {
+      // Verificar fraude
+      if (response.fraud_detected) {
+        this.block('Fraude detectada');
+        return false;
+      }
+
+      // Verificar bloqueio - PRIORIDADE MÁXIMA
+      if (response.blocked || response.status === 'blocked') {
+        this.block(response.reason || 'Licença bloqueada');
+        return false;
+      }
+
+      // Verificar se expirou
+      if (response.status === 'expired') {
+        this.block('Licença expirada');
+        return false;
+      }
+
+      // Verificar se está pendente
+      if (response.status === 'pending') {
+        return await this.activate();
+      }
+
       if (response.success && response.status === 'active') {
         this.saveCache(response);
-        console.log('✅ Licença válida');
         return true;
       }
 
       this.error = response.reason || 'Licença inválida';
-      
-      // Se a licença não está ativa, tentar ativar
-      if (response.status !== 'active') {
-        console.log('🔄 Tentando ativar licença...');
-        const activated = await this.activate();
-        if (activated) {
-          return true;
-        }
-      }
-      
       return false;
     }
 
-    // Servidor offline - verificar tolerância
+    // Servidor offline - tolerância MUITO reduzida
+    const cached = this.loadCache();
     if (cached && this.isWithinOfflineTolerance(cached)) {
-      console.log('⚠️ Modo offline - usando cache');
+      // Verificar novamente se cache indica bloqueio
+      if (cached.blocked || cached.status === 'blocked') {
+        this.block('Licença bloqueada');
+        return false;
+      }
       return true;
     }
 
+    // Sem conexão e sem cache válido = bloqueado por segurança
     this.error = 'Não foi possível validar a licença';
     return false;
   }
 
   /**
-   * Validar ou encerrar aplicação
+   * Verificação periódica em tempo real - intervalo curto
    */
-  async validateOrDie(): Promise<void> {
-    const isValid = await this.validate();
+  startRealtimeCheck(intervalSeconds: number = 15): void {
+    if (this.checkIntervalId) {
+      clearInterval(this.checkIntervalId);
+    }
 
-    if (!isValid) {
-      console.error('❌ LICENÇA INVÁLIDA:', this.error);
-      console.error('❌ Machine ID:', this.machineId);
-      console.error('❌ Servidor:', this.serverUrl);
-      process.exit(1);
+    console.log('🔄 Verificação de licença em tempo real iniciada');
+
+    this.checkIntervalId = setInterval(async () => {
+      const isValid = await this.validate(true); // SEMPRE força verificação
+      
+      if (!isValid && !this.isBlocked) {
+        this.block(this.error || 'Licença inválida');
+      }
+    }, intervalSeconds * 1000);
+  }
+
+  stopRealtimeCheck(): void {
+    if (this.checkIntervalId) {
+      clearInterval(this.checkIntervalId);
+      this.checkIntervalId = null;
     }
   }
 
-  /**
-   * Obter erro
-   */
+  async validateOrDie(): Promise<void> {
+    console.log('🔐 Validando licença...');
+    const isValid = await this.validate();
+
+    if (!isValid) {
+      console.error('❌ Licença inválida ou bloqueada');
+      process.exit(1);
+    }
+
+    console.log('✅ Licença válida');
+    
+    // Iniciar verificação em tempo real - a cada 15 segundos
+    this.startRealtimeCheck(15);
+  }
+
   getError(): string | null {
     return this.error;
   }
 
-  /**
-   * Obter Machine ID
-   */
   getMachineIdValue(): string {
     return this.machineId;
   }
 
-  /**
-   * Configurar timeout do cache
-   */
+  getIp(): string {
+    return this.ip;
+  }
+
   setCacheTimeout(seconds: number): this {
-    this.cacheTimeout = seconds;
+    this.cacheTimeout = Math.min(seconds, 30); // Máximo 30 segundos
     return this;
   }
 
-  /**
-   * Configurar tolerância offline
-   */
   setOfflineTolerance(seconds: number): this {
-    this.offlineTolerance = seconds;
+    this.offlineTolerance = Math.min(seconds, 120); // Máximo 2 minutos
     return this;
   }
 }
 
 /**
- * Middleware Express/NestJS para validação contínua
+ * Guard para verificação em todas as requisições
  */
-export function createLicenseMiddleware(validator: LicenseValidator) {
-  let lastCheck = 0;
-  const checkInterval = 300000; // 5 minutos
-
+export function createLicenseGuard(validator: LicenseValidator) {
   return async (req: any, res: any, next: any) => {
-    const now = Date.now();
+    if (validator.isLicenseBlocked()) {
+      return res.status(403).json({
+        error: 'LICENSE_BLOCKED',
+        message: 'Licença bloqueada',
+        reason: validator.getBlockReason(),
+        blocked: true,
+        status: validator.getStatus()
+      });
+    }
 
-    // Verificar a cada 5 minutos
-    if (now - lastCheck > checkInterval) {
-      const isValid = await validator.validate();
-      lastCheck = now;
+    const isValid = await validator.validate();
 
-      if (!isValid) {
-        return res.status(403).json({
-          error: 'Licença inválida',
-          reason: validator.getError(),
-          code: 'LICENSE_INVALID'
-        });
-      }
+    if (!isValid) {
+      return res.status(403).json({
+        error: 'LICENSE_INVALID',
+        message: 'Licença inválida',
+        reason: validator.getError(),
+        blocked: validator.isLicenseBlocked(),
+        status: validator.getStatus()
+      });
     }
 
     next();

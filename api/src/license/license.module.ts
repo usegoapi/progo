@@ -1,25 +1,12 @@
 /**
  * License Module para NestJS
  * 
- * Módulo que integra validação de licença no NestJS.
- * 
- * USO no app.module.ts:
- * import { LicenseModule } from './license/license.module';
- * 
- * @Module({
- *   imports: [
- *     LicenseModule.forRoot({
- *       serverUrl: process.env.LICENSE_SERVER,
- *       apiKey: process.env.LICENSE_KEY,
- *     }),
- *     // ... outros módulos
- *   ],
- * })
- * export class AppModule {}
+ * Sistema de proteção de licença com verificação em tempo real
  */
 
-import { Module, DynamicModule, Global, OnModuleInit, Injectable } from '@nestjs/common';
-import { LicenseValidator } from './LicenseValidator';
+import { Module, DynamicModule, Global, OnModuleInit, Injectable, NestMiddleware, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { LicenseValidator, LicenseStatus } from './LicenseValidator';
+import { LicenseController } from './license.controller';
 
 export interface LicenseModuleOptions {
   serverUrl: string;
@@ -33,7 +20,6 @@ export interface LicenseModuleOptions {
 export class LicenseService implements OnModuleInit {
   private validator: LicenseValidator;
   private checkInterval: number;
-  private intervalId: NodeJS.Timeout | null = null;
 
   constructor(private options: LicenseModuleOptions) {
     this.validator = new LicenseValidator(
@@ -41,28 +27,14 @@ export class LicenseService implements OnModuleInit {
       options.apiKey,
       options.cacheDir || '/app/license'
     );
-    this.checkInterval = (options.checkInterval || 300) * 1000; // default 5 min
+    this.checkInterval = options.checkInterval || 30;
   }
 
   async onModuleInit() {
     if (this.options.validateOnStart !== false) {
       console.log('🔐 Validando licença...');
       await this.validator.validateOrDie();
-      
-      // Iniciar verificação periódica
-      this.startPeriodicCheck();
     }
-  }
-
-  private startPeriodicCheck() {
-    this.intervalId = setInterval(async () => {
-      const isValid = await this.validator.validate();
-      if (!isValid) {
-        console.error('❌ Licença inválida durante verificação periódica');
-        console.error('❌ Erro:', this.validator.getError());
-        process.exit(1);
-      }
-    }, this.checkInterval);
   }
 
   async validate(): Promise<boolean> {
@@ -73,6 +45,14 @@ export class LicenseService implements OnModuleInit {
     return this.validator.activate();
   }
 
+  isBlocked(): boolean {
+    return this.validator.isLicenseBlocked();
+  }
+
+  getBlockReason(): string | null {
+    return this.validator.getBlockReason();
+  }
+
   getError(): string | null {
     return this.validator.getError();
   }
@@ -81,19 +61,50 @@ export class LicenseService implements OnModuleInit {
     return this.validator.getMachineIdValue();
   }
 
+  getIp(): string {
+    return this.validator.getIp();
+  }
+
+  getStatus(): LicenseStatus {
+    return this.validator.getStatus();
+  }
+
+  getValidator(): LicenseValidator {
+    return this.validator;
+  }
+
   onModuleDestroy() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
+    this.validator.stopRealtimeCheck();
+  }
+}
+
+@Injectable()
+export class LicenseMiddleware implements NestMiddleware {
+  constructor(private licenseService: LicenseService) {}
+
+  async use(req: any, res: any, next: () => void) {
+    // Verificar se está bloqueado
+    if (this.licenseService.isBlocked()) {
+      return res.status(403).json({
+        error: 'LICENSE_BLOCKED',
+        message: 'Licença bloqueada',
+        reason: this.licenseService.getBlockReason(),
+        blocked: true,
+        status: this.licenseService.getStatus()
+      });
     }
+
+    next();
   }
 }
 
 @Global()
 @Module({})
-export class LicenseModule {
+export class LicenseModule implements NestModule {
   static forRoot(options: LicenseModuleOptions): DynamicModule {
     return {
       module: LicenseModule,
+      controllers: [LicenseController],
       providers: [
         {
           provide: 'LICENSE_OPTIONS',
@@ -104,8 +115,17 @@ export class LicenseModule {
           useFactory: (opts: LicenseModuleOptions) => new LicenseService(opts),
           inject: ['LICENSE_OPTIONS'],
         },
+        LicenseMiddleware,
       ],
-      exports: [LicenseService],
+      exports: [LicenseService, LicenseMiddleware],
     };
+  }
+
+  configure(consumer: MiddlewareConsumer) {
+    // Aplicar middleware em todas as rotas exceto health check e license status
+    consumer
+      .apply(LicenseMiddleware)
+      .exclude('health', 'health/(.*)', 'license/status', 'license/check')
+      .forRoutes('*');
   }
 }
