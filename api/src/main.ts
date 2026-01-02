@@ -17,6 +17,12 @@ async function bootstrap() {
   
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
+  // Endpoint de status (passa pelo middleware de licença)
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/status', (req: any, res: any) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Criar usuário admin se não existir
   const prisma = app.get(PrismaService);
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@goapi.com';

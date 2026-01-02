@@ -116,21 +116,20 @@ export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     const checkLicense = async () => {
       try {
-        // Fazer uma requisição simples para verificar se a API está acessível
-        await api.get('/auth/me').catch((err) => {
-          // Se for erro de licença, tratar
-          if (err.response?.status === 403) {
-            const data = err.response?.data;
-            if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
-              setLicenseBlocked(true);
-              setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
-              return;
-            }
+        // Usar endpoint /status que passa pelo middleware de licença
+        await api.get('/status');
+        // Se chegou aqui, licença está OK
+        setLicenseBlocked(false);
+      } catch (err: any) {
+        // Verificar se é erro de licença
+        if (err.response?.status === 403) {
+          const data = err.response?.data;
+          if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
+            setLicenseBlocked(true);
+            setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
           }
-          // Outros erros (401, etc) são normais
-        });
-      } catch {
-        // Erro de rede - não bloquear
+        }
+        // Outros erros (rede, etc) - não bloquear
       } finally {
         setCheckingLicense(false);
       }
@@ -138,8 +137,8 @@ export default function App({ Component, pageProps }: AppProps) {
 
     checkLicense();
 
-    // Verificar licença periodicamente
-    const interval = setInterval(checkLicense, 30000);
+    // Verificar licença periodicamente (a cada 15 segundos)
+    const interval = setInterval(checkLicense, 15000);
     return () => clearInterval(interval);
   }, []);
 
