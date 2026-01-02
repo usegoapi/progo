@@ -9,12 +9,14 @@ import {
   DynamicModule,
   Global,
   OnModuleInit,
+  OnModuleDestroy,
   Injectable,
   NestMiddleware,
   MiddlewareConsumer,
   NestModule,
   Controller,
   Get,
+  Inject,
 } from '@nestjs/common';
 import { LicenseValidator, LicenseStatus } from './LicenseValidator';
 
@@ -26,11 +28,14 @@ export interface LicenseModuleOptions {
   checkInterval?: number;
 }
 
+// Token para injeção das opções
+const LICENSE_OPTIONS = 'LICENSE_OPTIONS';
+
 @Injectable()
-export class LicenseService implements OnModuleInit {
+export class LicenseService implements OnModuleInit, OnModuleDestroy {
   private validator: LicenseValidator;
 
-  constructor(private options: LicenseModuleOptions) {
+  constructor(@Inject(LICENSE_OPTIONS) private options: LicenseModuleOptions) {
     this.validator = new LicenseValidator(
       options.serverUrl,
       options.apiKey,
@@ -75,7 +80,7 @@ export class LicenseService implements OnModuleInit {
 export class LicenseMiddleware implements NestMiddleware {
   constructor(private licenseService: LicenseService) {}
 
-  async use(req: any, res: any, next: () => void) {
+  async use(_req: any, res: any, next: () => void) {
     // SEMPRE força verificação com servidor
     const isValid = await this.licenseService.forceValidate();
 
@@ -124,21 +129,16 @@ export class LicenseController {
 @Module({})
 export class LicenseModule implements NestModule {
   static forRoot(options: LicenseModuleOptions): DynamicModule {
-    const licenseServiceProvider = {
-      provide: LicenseService,
-      useFactory: () => new LicenseService(options),
-    };
-
     return {
       module: LicenseModule,
       controllers: [LicenseController],
       providers: [
-        licenseServiceProvider,
         {
-          provide: LicenseMiddleware,
-          useFactory: (licenseService: LicenseService) => new LicenseMiddleware(licenseService),
-          inject: [LicenseService],
+          provide: LICENSE_OPTIONS,
+          useValue: options,
         },
+        LicenseService,
+        LicenseMiddleware,
       ],
       exports: [LicenseService],
     };

@@ -9,14 +9,37 @@ import api from '@/lib/api';
 const publicPages = ['/login', '/', '/qr/[token]', '/blocked'];
 
 // Componente de tela de bloqueio - mesmo estilo da página de login
-function BlockedScreen({ reason }: { reason: string }) {
+function BlockedScreen({
+  reason,
+  onCheckLicense,
+}: {
+  reason: string;
+  onCheckLicense: () => Promise<boolean>;
+}) {
+  const router = useRouter();
   const [countdown, setCountdown] = useState(30);
+  const [checking, setChecking] = useState(false);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    try {
+      const isUnblocked = await onCheckLicense();
+      if (isUnblocked) {
+        // Licença foi liberada - mostrar alerta e redirecionar
+        alert('✅ Licença liberada! Redirecionando para o login...');
+        router.push('/login');
+      }
+    } finally {
+      setChecking(false);
+      setCountdown(30); // Resetar countdown
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          window.location.reload();
+          handleCheck();
           return 30;
         }
         return prev - 1;
@@ -101,11 +124,24 @@ function BlockedScreen({ reason }: { reason: string }) {
 
           {/* Botão */}
           <button
-            onClick={() => window.location.reload()}
-            className="w-full h-14 bg-primary hover:bg-primary-hover text-black font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+            onClick={handleCheck}
+            disabled={checking}
+            className="w-full h-14 bg-primary hover:bg-primary-hover text-black font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-70"
           >
-            <span className="material-symbols-outlined">refresh</span>
-            Verificar Novamente
+            {checking ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Verificando...
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined">refresh</span>
+                Verificar Novamente
+              </>
+            )}
           </button>
 
           {/* Contato */}
@@ -136,41 +172,64 @@ export default function App({ Component, pageProps }: AppProps) {
   const [blockReason, setBlockReason] = useState('');
   const [checkingLicense, setCheckingLicense] = useState(true);
 
-  // Verificar licença ao carregar
-  useEffect(() => {
-    const checkLicense = async () => {
-      try {
-        // Usar endpoint /license/check que verifica a licença
-        const response = await api.get('/license/check');
-        const data = response.data;
-        
-        if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
+  // Função para verificar licença - retorna true se foi desbloqueada
+  const checkLicense = async (): Promise<boolean> => {
+    try {
+      console.log('🔍 Verificando licença...');
+      const response = await api.get('/license/check');
+      const data = response.data;
+      console.log('🔍 Resposta:', data);
+
+      if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
+        console.log('🚫 Licença bloqueada!');
+        setLicenseBlocked(true);
+        setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+        return false;
+      } else {
+        console.log('✅ Licença OK');
+        setLicenseBlocked(false);
+        setBlockReason('');
+        return true; // Licença liberada!
+      }
+    } catch (err: any) {
+      console.log('🔍 Erro na verificação:', err.response?.status, err.response?.data);
+      if (err.response?.status === 403) {
+        const data = err.response?.data;
+        if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
+          console.log('🚫 Licença bloqueada (403)!');
           setLicenseBlocked(true);
           setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
-        } else {
-          setLicenseBlocked(false);
+          return false;
         }
-      } catch (err: any) {
-        // Verificar se é erro de licença
-        if (err.response?.status === 403) {
-          const data = err.response?.data;
-          if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
-            setLicenseBlocked(true);
-            setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
-          }
-        }
-        // Outros erros (rede, etc) - não bloquear
-      } finally {
-        setCheckingLicense(false);
       }
+      // Outros erros - não alterar estado
+      return false;
+    }
+  };
+
+  // Verificar licença ao carregar
+  useEffect(() => {
+    const initialCheck = async () => {
+      await checkLicense();
+      setCheckingLicense(false);
     };
 
-    checkLicense();
+    initialCheck();
 
     // Verificar licença periodicamente (a cada 10 segundos)
-    const interval = setInterval(checkLicense, 10000);
+    const interval = setInterval(async () => {
+      const wasBlocked = licenseBlocked;
+      const isNowUnblocked = await checkLicense();
+      
+      // Se estava bloqueado e agora foi liberado, redirecionar
+      if (wasBlocked && isNowUnblocked) {
+        alert('✅ Licença liberada! Redirecionando para o login...');
+        router.push('/login');
+      }
+    }, 10000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [licenseBlocked]);
 
   useEffect(() => {
     loadUser();
@@ -179,7 +238,7 @@ export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     if (!isLoading && !checkingLicense && !licenseBlocked) {
       const isPublicPage = publicPages.includes(router.pathname) || router.pathname.startsWith('/qr/');
-      
+
       if (!token && !isPublicPage) {
         router.push('/login');
       }
@@ -194,7 +253,7 @@ export default function App({ Component, pageProps }: AppProps) {
           <link rel="icon" href="/img/icone.png" />
           <title>Licença Bloqueada - GO-API</title>
         </Head>
-        <BlockedScreen reason={blockReason} />
+        <BlockedScreen reason={blockReason} onCheckLicense={checkLicense} />
       </>
     );
   }
