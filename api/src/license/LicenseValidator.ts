@@ -119,11 +119,6 @@ export class LicenseValidator {
    */
   private async request(endpoint: string, data: object): Promise<LicenseResponse | null> {
     const url = `${this.serverUrl}${endpoint}`;
-    const timestamp = Math.floor(Date.now() / 1000);
-    const signature = crypto
-      .createHmac('sha256', this.apiKey)
-      .update(`${this.apiKey}${timestamp}`)
-      .digest('hex');
 
     console.log(`🔍 Requisição para: ${url}`);
     console.log(`🔍 API Key: ${this.apiKey.substring(0, 8)}...`);
@@ -134,8 +129,8 @@ export class LicenseValidator {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Timestamp': timestamp.toString(),
-          'X-Signature': signature,
+          'Authorization': `Bearer ${this.apiKey}`,
+          'X-API-Key': this.apiKey,
           'User-Agent': 'LicenseValidator/1.0 Node.js'
         },
         body: JSON.stringify(data),
