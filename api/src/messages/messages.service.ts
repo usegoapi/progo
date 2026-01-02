@@ -11,8 +11,8 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as ffmpeg from 'fluent-ffmpeg';
-import * as ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
 @Injectable()
 export class MessagesService {
