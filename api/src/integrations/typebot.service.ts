@@ -1,5 +1,4 @@
 import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
 import { BaileysService } from '../instances/baileys.service';
 import axios from 'axios';
 
@@ -35,7 +34,6 @@ export class TypebotService implements OnModuleInit {
   private registeredInstances: Set<string> = new Set();
 
   constructor(
-    private prisma: PrismaService,
     @Inject(forwardRef(() => BaileysService))
     private baileys: BaileysService,
   ) {}
@@ -99,24 +97,17 @@ export class TypebotService implements OnModuleInit {
       // Ignorar mensagens de grupos e status
       if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') return;
 
-      // Buscar configuração do Typebot para o usuário da instância
-      const instance = await this.prisma.instance.findUnique({
-        where: { id: instanceId },
-        include: { user: { include: { integrations: true } } },
-      });
-
-      if (!instance) return;
-
-      const typebotIntegration = instance.user.integrations.find(
-        (i: any) => i.type === 'typebot' && i.active
-      );
-
-      if (!typebotIntegration) return;
-
-      const config = typebotIntegration.config as unknown as TypebotConfig;
+      // Obter configuração do Typebot das settings da instância (salvas em settings.json)
+      const settings = this.baileys.getSettings(instanceId);
+      const config = settings.typebot as TypebotConfig;
+      
+      if (!config) {
+        this.logger.debug(`Typebot: Nenhuma configuração para instância ${instanceId}`);
+        return;
+      }
       
       // Verificar se está habilitado
-      if (config.enabled === false) return;
+      if (!config.enabled) return;
       
       // Verificar se tem URL da API configurada
       if (!config.apiUrl || !config.publicName) {

@@ -1,5 +1,4 @@
 import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
 import { BaileysService } from '../instances/baileys.service';
 import axios from 'axios';
 
@@ -36,7 +35,6 @@ export class N8nService implements OnModuleInit {
   private registeredInstances: Set<string> = new Set();
 
   constructor(
-    private prisma: PrismaService,
     @Inject(forwardRef(() => BaileysService))
     private baileys: BaileysService,
   ) {}
@@ -93,29 +91,17 @@ export class N8nService implements OnModuleInit {
     try {
       if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') return;
 
-      const instance = await this.prisma.instance.findUnique({
-        where: { id: instanceId },
-        include: { user: { include: { integrations: true } } },
-      });
-
-      if (!instance) {
-        this.logger.debug(`n8n: Instância ${instanceId} não encontrada`);
-        return;
-      }
-
-      const n8nIntegration = instance.user.integrations.find(
-        (i: any) => (i.type === 'n8n' || i.type === 'N8N') && i.active
-      );
-
-      if (!n8nIntegration) {
-        this.logger.debug(`n8n: Nenhuma integração n8n ativa para usuário ${instance.userId}`);
-        return;
-      }
-
-      const config = n8nIntegration.config as unknown as N8nConfig;
+      // Obter configuração do n8n das settings da instância (salvas em settings.json)
+      const settings = this.baileys.getSettings(instanceId);
+      const config = settings.n8n as N8nConfig;
       
-      // Verificar se está habilitado (considera undefined como habilitado)
-      if (config.enabled === false) {
+      if (!config) {
+        this.logger.debug(`n8n: Nenhuma configuração n8n para instância ${instanceId}`);
+        return;
+      }
+      
+      // Verificar se está habilitado
+      if (!config.enabled) {
         this.logger.debug('n8n: Integração desabilitada');
         return;
       }

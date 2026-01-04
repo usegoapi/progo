@@ -1,5 +1,4 @@
 import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
 import { BaileysService } from '../instances/baileys.service';
 import axios from 'axios';
 
@@ -46,7 +45,6 @@ export class ChatwootService implements OnModuleInit {
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
   constructor(
-    private prisma: PrismaService,
     @Inject(forwardRef(() => BaileysService))
     private baileys: BaileysService,
   ) {}
@@ -136,28 +134,16 @@ export class ChatwootService implements OnModuleInit {
         return;
       }
 
-      const instance = await this.prisma.instance.findUnique({
-        where: { id: instanceId },
-        include: { user: { include: { integrations: true } } },
-      });
+      // Obter configuração do Chatwoot das settings da instância (salvas em settings.json)
+      const settings = this.baileys.getSettings(instanceId);
+      const config = settings.chatwoot as ChatwootConfig;
 
-      if (!instance) {
-        this.logger.debug(`Chatwoot: Instância ${instanceId} não encontrada`);
+      if (!config) {
+        this.logger.debug(`Chatwoot: Nenhuma configuração para instância ${instanceId}`);
         return;
       }
 
-      const chatwootIntegration = instance.user.integrations.find(
-        (i: any) => (i.type === 'chatwoot' || i.type === 'CHATWOOT') && i.active,
-      );
-
-      if (!chatwootIntegration) {
-        this.logger.debug(`Chatwoot: Nenhuma integração ativa para usuário ${instance.userId}`);
-        return;
-      }
-
-      const config = chatwootIntegration.config as unknown as ChatwootConfig;
-
-      if (config.enabled === false) {
+      if (!config.enabled) {
         this.logger.debug('Chatwoot: Integração desabilitada');
         return;
       }
