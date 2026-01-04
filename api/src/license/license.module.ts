@@ -33,46 +33,77 @@ const LICENSE_OPTIONS = 'LICENSE_OPTIONS';
 
 @Injectable()
 export class LicenseService implements OnModuleInit, OnModuleDestroy {
-  private validator: LicenseValidator;
+  private validator: LicenseValidator | null = null;
+  private licenseConfigured: boolean = false;
 
   constructor(@Inject(LICENSE_OPTIONS) private options: LicenseModuleOptions) {
-    this.validator = new LicenseValidator(
-      options.serverUrl,
-      options.apiKey,
-      options.cacheDir || '/app/license',
-    );
+    // Só criar validator se as opções estiverem configuradas
+    if (options.serverUrl && options.apiKey) {
+      this.validator = new LicenseValidator(
+        options.serverUrl,
+        options.apiKey,
+        options.cacheDir || '/app/license',
+      );
+      this.licenseConfigured = true;
+    } else {
+      console.warn('⚠️ Licença não configurada - sistema funcionando sem validação');
+    }
   }
 
   async onModuleInit() {
-    if (this.options.validateOnStart !== false) {
+    if (this.licenseConfigured && this.validator && this.options.validateOnStart !== false) {
       console.log('🔐 Validando licença...');
       await this.validator.validateOrDie();
     }
   }
 
   async validate(): Promise<boolean> {
+    if (!this.licenseConfigured || !this.validator) {
+      return true; // Sem licença configurada = sempre válido
+    }
     return this.validator.validate();
   }
 
   // Força verificação com servidor (ignora cache)
   async forceValidate(): Promise<boolean> {
+    if (!this.licenseConfigured || !this.validator) {
+      return true; // Sem licença configurada = sempre válido
+    }
     return this.validator.validate(true);
   }
 
   isBlocked(): boolean {
+    if (!this.licenseConfigured || !this.validator) {
+      return false; // Sem licença configurada = não bloqueado
+    }
     return this.validator.isLicenseBlocked();
   }
 
   getBlockReason(): string | null {
+    if (!this.licenseConfigured || !this.validator) {
+      return null;
+    }
     return this.validator.getBlockReason();
   }
 
   getStatus(): LicenseStatus {
+    if (!this.licenseConfigured || !this.validator) {
+      return {
+        valid: true,
+        blocked: false,
+        reason: null,
+        machineId: 'not-configured',
+        ip: 'not-configured',
+        expiresAt: null,
+      };
+    }
     return this.validator.getStatus();
   }
 
   onModuleDestroy() {
-    this.validator.stopRealtimeCheck();
+    if (this.validator) {
+      this.validator.stopRealtimeCheck();
+    }
   }
 }
 
@@ -81,19 +112,26 @@ export class LicenseMiddleware implements NestMiddleware {
   constructor(private licenseService: LicenseService) {}
 
   async use(_req: any, res: any, next: () => void) {
-    // SEMPRE força verificação com servidor
-    const isValid = await this.licenseService.forceValidate();
+    try {
+      // SEMPRE força verificação com servidor
+      const isValid = await this.licenseService.forceValidate();
 
-    if (!isValid || this.licenseService.isBlocked()) {
-      return res.status(403).json({
-        error: 'LICENSE_BLOCKED',
-        message: 'Licença bloqueada',
-        reason: this.licenseService.getBlockReason(),
-        blocked: true,
-        status: this.licenseService.getStatus(),
-      });
+      if (!isValid || this.licenseService.isBlocked()) {
+        return res.status(403).json({
+          error: 'LICENSE_BLOCKED',
+          message: 'Licença bloqueada',
+          reason: this.licenseService.getBlockReason(),
+          blocked: true,
+          status: this.licenseService.getStatus(),
+        });
+      }
+      next();
+    } catch (error) {
+      // Se houver erro na verificação, permitir acesso
+      // para não bloquear o sistema por erro de conexão
+      console.error('Erro no middleware de licença:', error);
+      next();
     }
-    next();
   }
 }
 
@@ -104,22 +142,49 @@ export class LicenseController {
 
   @Get('check')
   async check() {
-    // SEMPRE força verificação com servidor
-    const isValid = await this.licenseService.forceValidate();
+    try {
+      // SEMPRE força verificação com servidor
+      const isValid = await this.licenseService.forceValidate();
 
-    if (!isValid || this.licenseService.isBlocked()) {
+      if (!isValid || this.licenseService.isBlocked()) {
+        return {
+          error: 'LICENSE_BLOCKED',
+          message: 'Licença bloqueada',
+          reason: this.licenseService.getBlockReason(),
+          blocked: true,
+          status: this.licenseService.getStatus(),
+        };
+      }
+
       return {
-        error: 'LICENSE_BLOCKED',
-        message: 'Licença bloqueada',
-        reason: this.licenseService.getBlockReason(),
-        blocked: true,
+        success: true,
+        blocked: false,
         status: this.licenseService.getStatus(),
       };
+    } catch (error) {
+      // Se houver erro na verificação, retornar como não bloqueado
+      // para não bloquear o sistema por erro de conexão
+      console.error('Erro ao verificar licença:', error);
+      return {
+        success: true,
+        blocked: false,
+        status: {
+          valid: true,
+          blocked: false,
+          reason: null,
+          machineId: 'unknown',
+          ip: 'unknown',
+          expiresAt: null,
+        },
+      };
     }
+  }
 
+  @Get('status')
+  getStatus() {
     return {
-      success: true,
-      blocked: false,
+      blocked: this.licenseService.isBlocked(),
+      reason: this.licenseService.getBlockReason(),
       status: this.licenseService.getStatus(),
     };
   }
@@ -145,16 +210,18 @@ export class LicenseModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer) {
-    // Excluir rotas que não precisam de verificação de licença
+    // Aplicar middleware em todas as rotas EXCETO as de licença e health
     consumer
       .apply(LicenseMiddleware)
       .exclude(
         'health',
         'health/(.*)',
         'license',
-        'license/(.*)',
         'license/check',
+        'license/(.*)',
         'status',
+        'auth/login',
+        'auth/register',
       )
       .forRoutes('*');
   }

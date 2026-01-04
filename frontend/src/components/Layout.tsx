@@ -12,9 +12,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/instances', label: 'Instâncias', icon: 'smartphone' },
-  { href: '/messages', label: 'Mensagens', icon: 'chat' },
-  { href: '/webhooks', label: 'Webhooks', icon: 'webhook' },
-  { href: '/integrations', label: 'Integrações', icon: 'extension' },
+  { href: '/messages', label: 'Testar API', icon: 'api' },
 ];
 
 const systemItems: NavItem[] = [

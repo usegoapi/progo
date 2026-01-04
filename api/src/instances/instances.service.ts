@@ -33,6 +33,7 @@ export class InstancesService {
       phone: this.baileys.getPhone(i.id),
       profilePic: this.baileys.getProfilePic(i.id),
       profileName: this.baileys.getProfileName(i.id),
+      apiKey: i.apiKey,
     }));
   }
 
@@ -47,12 +48,14 @@ export class InstancesService {
       phone: this.baileys.getPhone(id),
       profilePic: this.baileys.getProfilePic(id),
       profileName: this.baileys.getProfileName(id),
+      apiKey: instance.apiKey,
     };
   }
 
   async create(dto: CreateInstanceDto, userId: string) {
+    const apiKey = `goapikey_${crypto.randomBytes(24).toString('hex')}`;
     return this.prisma.instance.create({
-      data: { name: dto.name, userId },
+      data: { name: dto.name, userId, apiKey },
     });
   }
 

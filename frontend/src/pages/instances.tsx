@@ -10,6 +10,7 @@ interface Instance {
   profilePic: string | null;
   profileName: string | null;
   status: string;
+  apiKey: string | null;
 }
 
 export default function Instances() {
@@ -27,6 +28,7 @@ export default function Instances() {
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedCard, setCopiedCard] = useState<string | null>(null);
+  const [copiedApiKey, setCopiedApiKey] = useState<string | null>(null);
   const [pollingActive, setPollingActive] = useState(false);
 
   const loadInstances = async () => {
@@ -185,6 +187,13 @@ export default function Instances() {
       setCopiedCard(instanceId);
       setTimeout(() => setCopiedCard(null), 2000);
     } catch {}
+  };
+
+  const copyApiKey = (instanceId: string, apiKey: string | null) => {
+    if (!apiKey) return;
+    navigator.clipboard.writeText(apiKey);
+    setCopiedApiKey(instanceId);
+    setTimeout(() => setCopiedApiKey(null), 2000);
   };
 
   const stopInstance = async (id: string) => {
@@ -535,11 +544,26 @@ export default function Instances() {
                       <span className="material-symbols-outlined text-[14px]">edit</span>
                     </button>
                   </div>
-                  <p className="text-xs text-slate-500 font-mono">ID: {instance.id.slice(0, 8)}</p>
-                  {instance.phone && (
-                    <p className="text-xs text-primary font-medium mt-0.5">
-                      +{instance.phone}
-                    </p>
+                  {instance.phone ? (
+                    <p className="text-xs text-primary font-medium">+{instance.phone}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500">Não conectado</p>
+                  )}
+                  {instance.apiKey && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <p className="text-xs text-slate-500 font-mono truncate max-w-[120px]">
+                        {instance.apiKey.slice(0, 12)}...
+                      </p>
+                      <button
+                        onClick={() => copyApiKey(instance.id, instance.apiKey)}
+                        className="p-0.5 rounded hover:bg-surface-light text-slate-500 hover:text-primary transition-all"
+                        title="Copiar API Key"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">
+                          {copiedApiKey === instance.id ? 'check' : 'content_copy'}
+                        </span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

@@ -24,6 +24,7 @@ model Instance {
   userId      String
   name        String
   status      String   @default("DISCONNECTED")
+  apiKey      String?  @unique
   sessionData Json?
   createdAt   DateTime @default(now())
   
