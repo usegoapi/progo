@@ -30,6 +30,88 @@ export interface ProxySettings {
   password: string;
 }
 
+export interface WebhookSettings {
+  enabled: boolean;
+  url: string;
+  events: string[];
+}
+
+export interface WebSocketSettings {
+  enabled: boolean;
+  events: string[];
+}
+
+export interface RabbitMQSettings {
+  enabled: boolean;
+  uri: string;
+  exchange: string;
+  events: string[];
+}
+
+export interface SQSSettings {
+  enabled: boolean;
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  queueUrl: string;
+  events: string[];
+}
+
+export interface TypebotSettings {
+  enabled: boolean;
+  apiUrl: string;
+  publicName: string;
+  triggerType: string;
+  triggerOperator: string;
+  keyword: string;
+  expireMinutes: number;
+  keywordFinish: string;
+  delayMessage: number;
+  unknownMessage: string;
+  listeningFromMe: boolean;
+  stopBotFromMe: boolean;
+  keepOpen: boolean;
+  debounceTime: number;
+}
+
+export interface N8nSettings {
+  enabled: boolean;
+  webhookUrl: string;
+  basicAuthUser: string;
+  basicAuthPassword: string;
+  triggerType: string;
+  triggerOperator: string;
+  keyword: string;
+  expireMinutes: number;
+  keywordFinish: string;
+  delayMessage: number;
+  unknownMessage: string;
+  listeningFromMe: boolean;
+  stopBotFromMe: boolean;
+  keepOpen: boolean;
+  debounceTime: number;
+  splitMessages: boolean;
+}
+
+export interface ChatwootSettings {
+  enabled: boolean;
+  url: string;
+  accountId: string;
+  token: string;
+  signMessages: boolean;
+  signDelimiter: string;
+  nameInbox: string;
+  organization: string;
+  logo: string;
+  conversationPending: boolean;
+  reopenConversation: boolean;
+  importContacts: boolean;
+  importMessages: boolean;
+  daysLimitImport: number;
+  ignoreJids: string;
+  autoCreate: boolean;
+}
+
 export interface InstanceSettings {
   rejectCalls: boolean;
   ignoreGroups: boolean;
@@ -38,6 +120,13 @@ export interface InstanceSettings {
   syncFullHistory: boolean;
   readStatus: boolean;
   proxy: ProxySettings;
+  webhook?: WebhookSettings;
+  websocket?: WebSocketSettings;
+  rabbitmq?: RabbitMQSettings;
+  sqs?: SQSSettings;
+  typebot?: TypebotSettings;
+  n8n?: N8nSettings;
+  chatwoot?: ChatwootSettings;
 }
 
 // Tipo para atualização parcial (aceita campos opcionais)
@@ -49,6 +138,13 @@ export type InstanceSettingsUpdate = {
   syncFullHistory?: boolean;
   readStatus?: boolean;
   proxy?: Partial<ProxySettings>;
+  webhook?: Partial<WebhookSettings>;
+  websocket?: Partial<WebSocketSettings>;
+  rabbitmq?: Partial<RabbitMQSettings>;
+  sqs?: Partial<SQSSettings>;
+  typebot?: Partial<TypebotSettings>;
+  n8n?: Partial<N8nSettings>;
+  chatwoot?: Partial<ChatwootSettings>;
 };
 
 @Injectable()
@@ -111,6 +207,41 @@ export class BaileysService {
     const updatedProxy = newSettings.proxy 
       ? { ...current.proxy, ...newSettings.proxy }
       : current.proxy;
+
+    // Merge webhook settings
+    const updatedWebhook = newSettings.webhook 
+      ? { ...(current.webhook || { enabled: false, url: '', events: [] }), ...newSettings.webhook }
+      : current.webhook;
+
+    // Merge websocket settings
+    const updatedWebsocket = newSettings.websocket 
+      ? { ...(current.websocket || { enabled: false, events: [] }), ...newSettings.websocket }
+      : current.websocket;
+
+    // Merge rabbitmq settings
+    const updatedRabbitmq = newSettings.rabbitmq 
+      ? { ...(current.rabbitmq || { enabled: false, uri: '', exchange: '', events: [] }), ...newSettings.rabbitmq }
+      : current.rabbitmq;
+
+    // Merge sqs settings
+    const updatedSqs = newSettings.sqs 
+      ? { ...(current.sqs || { enabled: false, accessKeyId: '', secretAccessKey: '', region: '', queueUrl: '', events: [] }), ...newSettings.sqs }
+      : current.sqs;
+
+    // Merge typebot settings
+    const updatedTypebot = newSettings.typebot 
+      ? { ...(current.typebot || { enabled: false, apiUrl: '', publicName: '', triggerType: 'keyword', triggerOperator: 'contains', keyword: '', expireMinutes: 0, keywordFinish: '', delayMessage: 1000, unknownMessage: '', listeningFromMe: false, stopBotFromMe: false, keepOpen: false, debounceTime: 10 }), ...newSettings.typebot }
+      : current.typebot;
+
+    // Merge n8n settings
+    const updatedN8n = newSettings.n8n 
+      ? { ...(current.n8n || { enabled: false, webhookUrl: '', basicAuthUser: '', basicAuthPassword: '', triggerType: 'keyword', triggerOperator: 'contains', keyword: '', expireMinutes: 0, keywordFinish: '', delayMessage: 1000, unknownMessage: '', listeningFromMe: false, stopBotFromMe: false, keepOpen: false, debounceTime: 10, splitMessages: false }), ...newSettings.n8n }
+      : current.n8n;
+
+    // Merge chatwoot settings
+    const updatedChatwoot = newSettings.chatwoot 
+      ? { ...(current.chatwoot || { enabled: false, url: '', accountId: '', token: '', signMessages: false, signDelimiter: '\\n', nameInbox: '', organization: '', logo: '', conversationPending: false, reopenConversation: true, importContacts: false, importMessages: false, daysLimitImport: 3, ignoreJids: '', autoCreate: true }), ...newSettings.chatwoot }
+      : current.chatwoot;
     
     const updated: InstanceSettings = {
       rejectCalls: newSettings.rejectCalls ?? current.rejectCalls,
@@ -120,6 +251,13 @@ export class BaileysService {
       syncFullHistory: newSettings.syncFullHistory ?? current.syncFullHistory,
       readStatus: newSettings.readStatus ?? current.readStatus,
       proxy: updatedProxy,
+      webhook: updatedWebhook,
+      websocket: updatedWebsocket,
+      rabbitmq: updatedRabbitmq,
+      sqs: updatedSqs,
+      typebot: updatedTypebot,
+      n8n: updatedN8n,
+      chatwoot: updatedChatwoot,
     };
     
     this.settings.set(instanceId, updated);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 
@@ -11,24 +12,8 @@ interface Instance {
   status: string;
 }
 
-interface InstanceSettings {
-  rejectCalls: boolean;
-  ignoreGroups: boolean;
-  alwaysOnline: boolean;
-  readMessages: boolean;
-  syncFullHistory: boolean;
-  readStatus: boolean;
-  proxy: {
-    enabled: boolean;
-    protocol: string;
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-  };
-}
-
 export default function Instances() {
+  const router = useRouter();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [newName, setNewName] = useState('');
   const [search, setSearch] = useState('');
@@ -36,25 +21,8 @@ export default function Instances() {
   const [qrModal, setQrModal] = useState<{ id: string; name: string; qr: string | null; connected: boolean; connecting: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [showSettings, setShowSettings] = useState<Instance | null>(null);
   const [showEdit, setShowEdit] = useState<Instance | null>(null);
   const [editName, setEditName] = useState('');
-  const [settings, setSettings] = useState<InstanceSettings>({
-    rejectCalls: false,
-    ignoreGroups: false,
-    alwaysOnline: false,
-    readMessages: false,
-    syncFullHistory: false,
-    readStatus: false,
-    proxy: {
-      enabled: false,
-      protocol: 'http',
-      host: '',
-      port: 0,
-      username: '',
-      password: '',
-    },
-  });
   const [deleteConfirm, setDeleteConfirm] = useState<Instance | null>(null);
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
@@ -255,29 +223,8 @@ export default function Instances() {
     } catch {}
   };
 
-  const openSettings = async (instance: Instance) => {
-    setShowSettings(instance);
-    try {
-      const { data } = await api.get(`/instances/${instance.id}/settings`);
-      setSettings(data);
-    } catch {
-      setSettings({
-        rejectCalls: false,
-        ignoreGroups: false,
-        alwaysOnline: false,
-        readMessages: false,
-        syncFullHistory: false,
-        readStatus: false,
-        proxy: {
-          enabled: false,
-          protocol: 'http',
-          host: '',
-          port: 0,
-          username: '',
-          password: '',
-        },
-      });
-    }
+  const openSettings = (instance: Instance) => {
+    router.push(`/settings/${instance.id}`);
   };
 
   const openEdit = (instance: Instance) => {
@@ -297,32 +244,11 @@ export default function Instances() {
     setLoading(false);
   };
 
-  const saveSettings = async () => {
-    if (!showSettings) return;
-    try {
-      await api.put(`/instances/${showSettings.id}/settings`, settings);
-      setShowSettings(null);
-    } catch {}
-  };
-
-  const toggleSetting = (key: keyof InstanceSettings) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const filteredInstances = instances.filter((i) => {
     const matchSearch = i.name.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || i.status === statusFilter;
     return matchSearch && matchStatus;
   });
-
-  const settingsOptions = [
-    { key: 'rejectCalls', label: 'Rejeitar Chamadas', desc: 'Rejeitar todas as chamadas recebidas automaticamente', icon: 'call_end' },
-    { key: 'ignoreGroups', label: 'Ignorar Grupos', desc: 'Ignorar todas as mensagens de grupos', icon: 'group_off' },
-    { key: 'alwaysOnline', label: 'Sempre Online', desc: 'Manter o WhatsApp sempre online', icon: 'wifi' },
-    { key: 'readMessages', label: 'Ler Mensagens', desc: 'Marcar todas as mensagens como lidas automaticamente', icon: 'mark_chat_read' },
-    { key: 'syncFullHistory', label: 'Sincronizar Histórico', desc: 'Sincronizar histórico completo ao escanear QR Code', icon: 'history' },
-    { key: 'readStatus', label: 'Ler Status', desc: 'Marcar todos os status como visualizados', icon: 'visibility' },
-  ];
 
 
   return (
@@ -560,181 +486,6 @@ export default function Instances() {
                   </button>
                 </>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSettings && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-dark border border-border-dark rounded-2xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-border-dark">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary">settings</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Configurações</h3>
-                  <p className="text-sm text-slate-400">{showSettings.name}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 max-h-[500px] overflow-y-auto">
-              {/* Proxy Section */}
-              <div className="mb-4 p-4 bg-surface-light/50 rounded-xl border border-border-dark">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">vpn_key</span>
-                    <span className="text-white font-semibold">Proxy</span>
-                  </div>
-                  <button
-                    onClick={() => setSettings(prev => ({ 
-                      ...prev, 
-                      proxy: { ...prev.proxy, enabled: !prev.proxy.enabled } 
-                    }))}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      settings.proxy.enabled ? 'bg-primary' : 'bg-surface-light'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                        settings.proxy.enabled ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {settings.proxy.enabled && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">Protocol</label>
-                      <select
-                        value={settings.proxy.protocol}
-                        onChange={(e) => setSettings(prev => ({ 
-                          ...prev, 
-                          proxy: { ...prev.proxy, protocol: e.target.value } 
-                        }))}
-                        className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
-                      >
-                        <option value="http">HTTP</option>
-                        <option value="https">HTTPS</option>
-                        <option value="socks4">SOCKS4</option>
-                        <option value="socks5">SOCKS5</option>
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
-                        <label className="block text-xs text-slate-400 mb-1">Host</label>
-                        <input
-                          type="text"
-                          placeholder="proxy.example.com"
-                          value={settings.proxy.host}
-                          onChange={(e) => setSettings(prev => ({ 
-                            ...prev, 
-                            proxy: { ...prev.proxy, host: e.target.value } 
-                          }))}
-                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">Port</label>
-                        <input
-                          type="number"
-                          placeholder="8080"
-                          value={settings.proxy.port || ''}
-                          onChange={(e) => setSettings(prev => ({ 
-                            ...prev, 
-                            proxy: { ...prev.proxy, port: parseInt(e.target.value) || 0 } 
-                          }))}
-                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">Username</label>
-                        <input
-                          type="text"
-                          placeholder="Opcional"
-                          value={settings.proxy.username}
-                          onChange={(e) => setSettings(prev => ({ 
-                            ...prev, 
-                            proxy: { ...prev.proxy, username: e.target.value } 
-                          }))}
-                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">Password</label>
-                        <input
-                          type="password"
-                          placeholder="Opcional"
-                          value={settings.proxy.password}
-                          onChange={(e) => setSettings(prev => ({ 
-                            ...prev, 
-                            proxy: { ...prev.proxy, password: e.target.value } 
-                          }))}
-                          className="w-full h-10 px-3 bg-[#1a1a1a] text-white border border-border-dark rounded-lg text-sm focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                      O proxy será usado na próxima conexão da instância.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Divider */}
-              <div className="border-t border-border-dark my-4" />
-
-              {/* Other Settings */}
-              {settingsOptions.map((option) => (
-                <div
-                  key={option.key}
-                  className="flex items-center justify-between p-4 hover:bg-surface-light/50 rounded-xl transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-slate-500 mt-0.5">{option.icon}</span>
-                    <div>
-                      <p className="text-white font-medium text-sm">{option.label}</p>
-                      <p className="text-slate-500 text-xs mt-0.5">{option.desc}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => toggleSetting(option.key as keyof InstanceSettings)}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      settings[option.key as keyof InstanceSettings]
-                        ? 'bg-primary'
-                        : 'bg-surface-light'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                        settings[option.key as keyof InstanceSettings]
-                          ? 'translate-x-7'
-                          : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 border-t border-border-dark flex gap-3">
-              <button
-                onClick={() => setShowSettings(null)}
-                className="flex-1 py-2.5 rounded-lg border border-border-dark text-slate-400 hover:text-white hover:bg-surface-light transition-all text-sm"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={saveSettings}
-                className="flex-1 py-2.5 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all text-sm"
-              >
-                Salvar
-              </button>
             </div>
           </div>
         </div>

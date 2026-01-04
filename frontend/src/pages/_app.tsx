@@ -1,11 +1,22 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '@/store/auth';
 import api from '@/lib/api';
-import Swal from 'sweetalert2';
+
+// Tipo para SweetAlert2
+type SwalType = {
+  fire: (options: any) => Promise<any>;
+};
+
+// Importar SweetAlert2 dinamicamente para evitar problemas de SSR
+let Swal: SwalType | null = null;
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Swal = require('sweetalert2').default;
+}
 
 const publicPages = ['/login', '/', '/qr/[token]', '/blocked'];
 
@@ -25,7 +36,7 @@ function BlockedScreen({
     setChecking(true);
     try {
       const isUnblocked = await onCheckLicense();
-      if (isUnblocked) {
+      if (isUnblocked && Swal) {
         // Licença foi liberada - mostrar SweetAlert e redirecionar
         await Swal.fire({
           icon: 'success',
@@ -185,7 +196,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const [licenseBlocked, setLicenseBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [checkingLicense, setCheckingLicense] = useState(true);
-  const [wasBlocked, setWasBlocked] = useState(false);
+  const previousBlockedRef = useRef(false);
 
   // Função para verificar licença - retorna true se foi desbloqueada
   const checkLicense = useCallback(async (): Promise<boolean> => {
@@ -196,25 +207,30 @@ export default function App({ Component, pageProps }: AppProps) {
       if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
         setLicenseBlocked(true);
         setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+        previousBlockedRef.current = true;
         return false;
       } else {
         // Licença OK
-        const previouslyBlocked = licenseBlocked;
+        const wasBlocked = previousBlockedRef.current;
         setLicenseBlocked(false);
         setBlockReason('');
-        return previouslyBlocked; // Retorna true se estava bloqueado antes
+        previousBlockedRef.current = false;
+        return wasBlocked; // Retorna true se estava bloqueado antes
       }
     } catch (err: any) {
+      // Se 403, verificar se é bloqueio de licença
       if (err.response?.status === 403) {
         const data = err.response?.data;
         if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
           setLicenseBlocked(true);
           setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+          previousBlockedRef.current = true;
           return false;
         }
       }
-      // Erro 404 ou outros - não bloquear, apenas logar
-      console.warn('Erro ao verificar licença:', err.response?.status);
+      // Erro 404, 502 ou outros - não bloquear (licença pode não estar configurada)
+      console.warn('Erro ao verificar licença:', err.response?.status || err.message);
+      setLicenseBlocked(false);
       return false;
     }
   }, [licenseBlocked]);
@@ -232,14 +248,14 @@ export default function App({ Component, pageProps }: AppProps) {
 
     // Verificar licença periodicamente (a cada 10 segundos)
     interval = setInterval(async () => {
-      const previouslyBlocked = licenseBlocked;
+      const wasBlockedBefore = previousBlockedRef.current;
       
       try {
         const response = await api.get('/license/check');
         const data = response.data;
 
         if (data?.blocked || data?.error === 'LICENSE_BLOCKED') {
-          if (!previouslyBlocked) {
+          if (!wasBlockedBefore && Swal) {
             // Acabou de ser bloqueado - mostrar alerta
             Swal.fire({
               icon: 'error',
@@ -258,9 +274,10 @@ export default function App({ Component, pageProps }: AppProps) {
           }
           setLicenseBlocked(true);
           setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+          previousBlockedRef.current = true;
         } else {
           // Licença OK
-          if (previouslyBlocked) {
+          if (wasBlockedBefore && Swal) {
             // Foi desbloqueado - mostrar alerta e redirecionar
             await Swal.fire({
               icon: 'success',
@@ -280,12 +297,13 @@ export default function App({ Component, pageProps }: AppProps) {
           }
           setLicenseBlocked(false);
           setBlockReason('');
+          previousBlockedRef.current = false;
         }
       } catch (err: any) {
         if (err.response?.status === 403) {
           const data = err.response?.data;
           if (data?.error === 'LICENSE_BLOCKED' || data?.error === 'LICENSE_INVALID' || data?.blocked) {
-            if (!previouslyBlocked) {
+            if (!wasBlockedBefore && Swal) {
               Swal.fire({
                 icon: 'error',
                 title: 'Licença Bloqueada',
@@ -303,15 +321,17 @@ export default function App({ Component, pageProps }: AppProps) {
             }
             setLicenseBlocked(true);
             setBlockReason(data?.reason || data?.message || 'Licença bloqueada ou inválida');
+            previousBlockedRef.current = true;
           }
         }
+        // Outros erros - não bloquear
       }
     }, 10000);
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [licenseBlocked, router]);
+  }, [router]);
 
   useEffect(() => {
     loadUser();
