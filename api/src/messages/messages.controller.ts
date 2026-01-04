@@ -2,9 +2,8 @@ import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { MessagesService } from './messages.service';
 import {
-  SendTextDto, SendImageDto, SendAudioDto, SendLocationDto,
-  SendButtonsDto, SendCarouselDto, SendPixDto, SendListDto,
-  SendPollDto, SendInteractiveButtonsDto,
+  SendTextDto, SendImageDto, SendAudioDto, SendVideoDto, SendDocumentDto,
+  SendContactDto, SendLocationDto, SendPixDto, SendListDto, SendPollDto,
 } from './dto/message.dto';
 
 @Controller('messages')
@@ -27,19 +26,24 @@ export class MessagesController {
     return this.messagesService.sendAudio(dto);
   }
 
+  @Post('video')
+  sendVideo(@Body() dto: SendVideoDto) {
+    return this.messagesService.sendVideo(dto);
+  }
+
+  @Post('document')
+  sendDocument(@Body() dto: SendDocumentDto) {
+    return this.messagesService.sendDocument(dto);
+  }
+
+  @Post('contact')
+  sendContact(@Body() dto: SendContactDto) {
+    return this.messagesService.sendContact(dto);
+  }
+
   @Post('location')
   sendLocation(@Body() dto: SendLocationDto) {
     return this.messagesService.sendLocation(dto);
-  }
-
-  @Post('buttons')
-  sendButtons(@Body() dto: SendButtonsDto) {
-    return this.messagesService.sendButtons(dto);
-  }
-
-  @Post('carousel')
-  sendCarousel(@Body() dto: SendCarouselDto) {
-    return this.messagesService.sendCarousel(dto);
   }
 
   @Post('pix')
@@ -55,10 +59,5 @@ export class MessagesController {
   @Post('poll')
   sendPoll(@Body() dto: SendPollDto) {
     return this.messagesService.sendPoll(dto);
-  }
-
-  @Post('interactive')
-  sendInteractiveButtons(@Body() dto: SendInteractiveButtonsDto) {
-    return this.messagesService.sendInteractiveButtons(dto);
   }
 }

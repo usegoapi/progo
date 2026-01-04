@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
+import Swal from 'sweetalert2';
 
 // Types
 interface Instance {
@@ -311,8 +312,27 @@ export default function InstanceSettingsPage() {
     setSaving(section);
     try {
       await api.put(`/instances/${instanceId}/settings`, data);
+      Swal.fire({
+        icon: 'success',
+        title: 'Salvo!',
+        text: 'Configurações salvas com sucesso.',
+        background: '#1a1a1a',
+        color: '#fff',
+        confirmButtonColor: '#22c55e',
+        timer: 2000,
+        timerProgressBar: true,
+        showConfirmButton: false,
+      });
     } catch (error) {
       console.error('Error saving:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Erro!',
+        text: 'Não foi possível salvar as configurações.',
+        background: '#1a1a1a',
+        color: '#fff',
+        confirmButtonColor: '#ef4444',
+      });
     }
     setSaving(null);
   };

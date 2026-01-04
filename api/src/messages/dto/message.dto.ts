@@ -21,45 +21,34 @@ export class SendAudioDto {
   @IsOptional() @IsBoolean() ptt?: boolean;
 }
 
+export class SendVideoDto {
+  @IsString() instanceId: string;
+  @IsString() to: string;
+  @IsString() videoUrl: string;
+  @IsOptional() @IsString() caption?: string;
+}
+
+export class SendDocumentDto {
+  @IsString() instanceId: string;
+  @IsString() to: string;
+  @IsString() documentUrl: string;
+  @IsOptional() @IsString() filename?: string;
+  @IsOptional() @IsString() caption?: string;
+}
+
+export class SendContactDto {
+  @IsString() instanceId: string;
+  @IsString() to: string;
+  @IsString() contactName: string;
+  @IsString() contactPhone: string;
+  @IsOptional() @IsString() organization?: string;
+}
+
 export class SendLocationDto {
   @IsString() instanceId: string;
   @IsString() to: string;
   @IsNumber() latitude: number;
   @IsNumber() longitude: number;
-}
-
-export class ButtonDto {
-  @IsString() text: string;
-}
-
-export class SendButtonsDto {
-  @IsString() instanceId: string;
-  @IsString() to: string;
-  @IsString() text: string;
-  @IsOptional() @IsString() footer?: string;
-  @IsArray() @ValidateNested({ each: true }) @Type(() => ButtonDto)
-  buttons: ButtonDto[];
-}
-
-export class CarouselButtonDto {
-  @IsString() type: string;
-  @IsString() displayText: string;
-  @IsOptional() @IsString() url?: string;
-  @IsOptional() @IsString() id?: string;
-}
-
-export class CarouselCardDto {
-  @IsString() imageUrl: string;
-  @IsArray() @ValidateNested({ each: true }) @Type(() => CarouselButtonDto)
-  buttons: CarouselButtonDto[];
-}
-
-export class SendCarouselDto {
-  @IsString() instanceId: string;
-  @IsString() to: string;
-  @IsString() bodyText: string;
-  @IsArray() @ValidateNested({ each: true }) @Type(() => CarouselCardDto)
-  cards: CarouselCardDto[];
 }
 
 export class SendPixDto {
@@ -104,24 +93,4 @@ export class SendPollDto {
   @IsString() question: string;
   @IsArray() @IsString({ each: true }) options: string[];
   @IsOptional() @IsNumber() selectableCount?: number;
-}
-
-export class InteractiveButtonDto {
-  @IsString() type: string;
-  @IsString() displayText: string;
-  @IsOptional() @IsString() url?: string;
-  @IsOptional() @IsString() phoneNumber?: string;
-  @IsOptional() @IsString() copyCode?: string;
-  @IsOptional() @IsString() id?: string;
-}
-
-export class SendInteractiveButtonsDto {
-  @IsString() instanceId: string;
-  @IsString() to: string;
-  @IsString() text: string;
-  @IsOptional() @IsString() footer?: string;
-  @IsOptional() @IsString() title?: string;
-  @IsOptional() @IsString() imageUrl?: string;
-  @IsArray() @ValidateNested({ each: true }) @Type(() => InteractiveButtonDto)
-  buttons: InteractiveButtonDto[];
 }

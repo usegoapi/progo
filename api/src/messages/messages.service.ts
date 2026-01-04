@@ -2,9 +2,8 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../shared/prisma.service';
 import { BaileysService } from '../instances/baileys.service';
 import {
-  SendTextDto, SendImageDto, SendAudioDto, SendLocationDto,
-  SendButtonsDto, SendCarouselDto, SendPixDto, SendListDto,
-  SendPollDto, SendInteractiveButtonsDto,
+  SendTextDto, SendImageDto, SendAudioDto, SendVideoDto, SendDocumentDto,
+  SendContactDto, SendLocationDto, SendPixDto, SendListDto, SendPollDto,
 } from './dto/message.dto';
 import * as https from 'https';
 import * as http from 'http';
@@ -217,45 +216,89 @@ export class MessagesService {
     return this.saveMessage(dto.instanceId, dto.to, 'LOCATION', { latitude: dto.latitude, longitude: dto.longitude });
   }
 
-  async sendButtons(dto: SendButtonsDto) {
-    const socket = this.baileys.getSocket(dto.instanceId);
-    if (!socket) throw new BadRequestException('Instância não conectada');
-
-    const to = this.formatPhone(dto.to);
-    const buttonsText = dto.buttons.map((btn, i) => `${i + 1}. ${btn.text}`).join('\n');
-    const fullText = `${dto.text}\n\n${buttonsText}\n\n${dto.footer || 'GO-API'}`;
-    await socket.sendMessage(to, { text: fullText });
-    return this.saveMessage(dto.instanceId, dto.to, 'BUTTONS', { text: dto.text, buttons: dto.buttons });
-  }
-
-  async sendCarousel(dto: SendCarouselDto) {
+  async sendVideo(dto: SendVideoDto) {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
     const to = this.formatPhone(dto.to);
     
-    const cards = dto.cards.map((card) => ({
-      body: card.imageUrl,
-      footer: '',
-      image: { url: card.imageUrl },
-      buttons: card.buttons.map(btn => ({
-        name: btn.type === 'cta_url' ? 'cta_url' : 'quick_reply',
-        buttonParamsJson: JSON.stringify(
-          btn.type === 'cta_url'
-            ? { display_text: btn.displayText, url: btn.url }
-            : { display_text: btn.displayText, id: btn.id || btn.displayText }
-        ),
-      })),
-    }));
+    try {
+      const videoBuffer = await this.downloadMedia(dto.videoUrl);
+      const mimetype = this.getMimeType(dto.videoUrl, 'video');
+      
+      await socket.sendMessage(to, { 
+        video: videoBuffer, 
+        mimetype,
+        caption: dto.caption 
+      });
+    } catch (downloadError) {
+      this.logger.warn(`Download failed, trying direct URL: ${downloadError.message}`);
+      try {
+        await socket.sendMessage(to, { video: { url: dto.videoUrl }, caption: dto.caption });
+      } catch (urlError) {
+        this.logger.error(`Failed to send video: ${urlError.message}`);
+        throw new BadRequestException(`Não foi possível enviar o vídeo. Verifique se a URL é acessível: ${dto.videoUrl}`);
+      }
+    }
+    
+    return this.saveMessage(dto.instanceId, dto.to, 'VIDEO', { videoUrl: dto.videoUrl, caption: dto.caption });
+  }
+
+  async sendDocument(dto: SendDocumentDto) {
+    const socket = this.baileys.getSocket(dto.instanceId);
+    if (!socket) throw new BadRequestException('Instância não conectada');
+
+    const to = this.formatPhone(dto.to);
+    const filename = dto.filename || dto.documentUrl.split('/').pop() || 'document';
+    
+    try {
+      const docBuffer = await this.downloadMedia(dto.documentUrl);
+      const mimetype = this.getMimeType(dto.documentUrl, 'document');
+      
+      await socket.sendMessage(to, { 
+        document: docBuffer, 
+        mimetype,
+        fileName: filename,
+        caption: dto.caption 
+      });
+    } catch (downloadError) {
+      this.logger.warn(`Download failed, trying direct URL: ${downloadError.message}`);
+      try {
+        await socket.sendMessage(to, { 
+          document: { url: dto.documentUrl }, 
+          fileName: filename,
+          caption: dto.caption 
+        });
+      } catch (urlError) {
+        this.logger.error(`Failed to send document: ${urlError.message}`);
+        throw new BadRequestException(`Não foi possível enviar o documento. Verifique se a URL é acessível: ${dto.documentUrl}`);
+      }
+    }
+    
+    return this.saveMessage(dto.instanceId, dto.to, 'DOCUMENT', { documentUrl: dto.documentUrl, filename, caption: dto.caption });
+  }
+
+  async sendContact(dto: SendContactDto) {
+    const socket = this.baileys.getSocket(dto.instanceId);
+    if (!socket) throw new BadRequestException('Instância não conectada');
+
+    const to = this.formatPhone(dto.to);
+    
+    const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:${dto.contactName}
+TEL;type=CELL;type=VOICE;waid=${dto.contactPhone.replace(/\D/g, '')}:+${dto.contactPhone.replace(/\D/g, '')}
+${dto.organization ? `ORG:${dto.organization}` : ''}
+END:VCARD`;
 
     await socket.sendMessage(to, {
-      text: dto.bodyText,
-      footer: 'GO-API',
-      title: 'Carrossel',
-      cards,
+      contacts: {
+        displayName: dto.contactName,
+        contacts: [{ vcard }],
+      },
     });
-
-    return this.saveMessage(dto.instanceId, dto.to, 'CAROUSEL', { bodyText: dto.bodyText, cards: JSON.parse(JSON.stringify(dto.cards)) });
+    
+    return this.saveMessage(dto.instanceId, dto.to, 'CONTACT', { contactName: dto.contactName, contactPhone: dto.contactPhone });
   }
 
   async sendPix(dto: SendPixDto) {
@@ -322,78 +365,5 @@ export class MessagesService {
     });
 
     return this.saveMessage(dto.instanceId, dto.to, 'POLL', { question: dto.question, options: dto.options });
-  }
-
-  async sendInteractiveButtons(dto: SendInteractiveButtonsDto) {
-    const socket = this.baileys.getSocket(dto.instanceId);
-    if (!socket) throw new BadRequestException('Instância não conectada');
-
-    const to = this.formatPhone(dto.to);
-    
-    // Mapear botões para o formato interactiveButtons do Baileys (com fix: true)
-    const interactiveButtons = dto.buttons.map(btn => {
-      if (btn.type === 'cta_url') {
-        return {
-          name: 'cta_url',
-          buttonParamsJson: JSON.stringify({
-            fix: true,
-            display_text: btn.displayText,
-            url: btn.url,
-            merchant_url: btn.url,
-          }),
-        };
-      } else if (btn.type === 'cta_call') {
-        return {
-          name: 'cta_call',
-          buttonParamsJson: JSON.stringify({
-            fix: true,
-            display_text: btn.displayText,
-            phone_number: btn.phoneNumber,
-          }),
-        };
-      } else if (btn.type === 'cta_copy') {
-        return {
-          name: 'cta_copy',
-          buttonParamsJson: JSON.stringify({
-            fix: true,
-            display_text: btn.displayText,
-            copy_code: btn.copyCode,
-          }),
-        };
-      } else {
-        // quick_reply (REPLY no Baileys)
-        return {
-          name: 'quick_reply',
-          buttonParamsJson: JSON.stringify({
-            fix: true,
-            display_text: btn.displayText,
-            id: btn.id || btn.displayText,
-          }),
-        };
-      }
-    });
-
-    // Construir mensagem com interactiveButtons diretamente (formato Baileys)
-    if (dto.imageUrl) {
-      // Com imagem: usar caption, media: true, e image: { url }
-      await socket.sendMessage(to, {
-        caption: dto.text,
-        footer: dto.footer || 'GO-API',
-        title: dto.title || '',
-        media: true,
-        image: { url: dto.imageUrl },
-        interactiveButtons,
-      });
-    } else {
-      // Sem imagem: usar text
-      await socket.sendMessage(to, {
-        text: dto.text,
-        footer: dto.footer || 'GO-API',
-        title: dto.title || '',
-        interactiveButtons,
-      });
-    }
-
-    return this.saveMessage(dto.instanceId, dto.to, 'INTERACTIVE', { text: dto.text, buttons: JSON.parse(JSON.stringify(dto.buttons)) });
   }
 }
