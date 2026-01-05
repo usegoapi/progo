@@ -51,19 +51,6 @@ export class SendLocationDto {
   @IsNumber() longitude: number;
 }
 
-export class SendPixDto {
-  @IsString() instanceId: string;
-  @IsString() to: string;
-  @IsString() text: string;
-  @IsOptional() @IsString() footer?: string;
-  @IsOptional() @IsString() title?: string;
-  @IsNumber() amount: number;
-  @IsString() merchantName: string;
-  @IsString() pixKey: string;
-  @IsString() pixKeyType: string;
-  @IsOptional() @IsString() productName?: string;
-}
-
 export class ListRowDto {
   @IsString() title: string;
   @IsOptional() @IsString() description?: string;

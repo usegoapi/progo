@@ -3,7 +3,7 @@ import { ApiKeyGuard } from '../auth/api-key.guard';
 import { MessagesService } from './messages.service';
 import {
   SendTextDto, SendImageDto, SendAudioDto, SendVideoDto, SendDocumentDto,
-  SendContactDto, SendLocationDto, SendPixDto, SendListDto, SendPollDto,
+  SendContactDto, SendLocationDto, SendListDto, SendPollDto,
 } from './dto/message.dto';
 
 @Controller('api')
@@ -11,7 +11,6 @@ import {
 export class ApiController {
   constructor(private messagesService: MessagesService) {}
 
-  // Sobrescreve o instanceId com o da apiKey autenticada
   private withInstanceId(dto: any, req: any) {
     return { ...dto, instanceId: req.instanceId };
   }
@@ -49,11 +48,6 @@ export class ApiController {
   @Post('send/location')
   sendLocation(@Body() dto: Omit<SendLocationDto, 'instanceId'> & { instanceId?: string }, @Req() req: any) {
     return this.messagesService.sendLocation(this.withInstanceId(dto, req));
-  }
-
-  @Post('send/pix')
-  sendPix(@Body() dto: Omit<SendPixDto, 'instanceId'> & { instanceId?: string }, @Req() req: any) {
-    return this.messagesService.sendPix(this.withInstanceId(dto, req));
   }
 
   @Post('send/list')

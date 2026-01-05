@@ -4,10 +4,12 @@
   "description": "GO-API - WhatsApp API with Baileys",
   "main": "dist/main.js",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && node scripts/obfuscate.js",
+    "build:dev": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main.js"
+    "start:prod": "node dist/main.js",
+    "obfuscate": "node scripts/obfuscate.js"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -40,6 +42,7 @@
     "@types/node": "^20.10.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/qrcode": "^1.5.5",
+    "javascript-obfuscator": "^4.1.1",
     "prisma": "^5.22.0",
     "typescript": "^5.3.0"
   }

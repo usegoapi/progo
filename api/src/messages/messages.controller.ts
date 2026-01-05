@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { MessagesService } from './messages.service';
 import {
   SendTextDto, SendImageDto, SendAudioDto, SendVideoDto, SendDocumentDto,
-  SendContactDto, SendLocationDto, SendPixDto, SendListDto, SendPollDto,
+  SendContactDto, SendLocationDto, SendListDto, SendPollDto,
 } from './dto/message.dto';
 
 @Controller('messages')
@@ -44,11 +44,6 @@ export class MessagesController {
   @Post('location')
   sendLocation(@Body() dto: SendLocationDto) {
     return this.messagesService.sendLocation(dto);
-  }
-
-  @Post('pix')
-  sendPix(@Body() dto: SendPixDto) {
-    return this.messagesService.sendPix(dto);
   }
 
   @Post('list')

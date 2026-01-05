@@ -3,7 +3,7 @@ import { PrismaService } from '../shared/prisma.service';
 import { BaileysService } from '../instances/baileys.service';
 import {
   SendTextDto, SendImageDto, SendAudioDto, SendVideoDto, SendDocumentDto,
-  SendContactDto, SendLocationDto, SendPixDto, SendListDto, SendPollDto,
+  SendContactDto, SendLocationDto, SendListDto, SendPollDto,
 } from './dto/message.dto';
 import * as https from 'https';
 import * as http from 'http';
@@ -347,43 +347,6 @@ END:VCARD`;
     });
     
     return this.saveMessage(dto.instanceId, dto.to, 'CONTACT', { contactName: dto.contactName, contactPhone: dto.contactPhone });
-  }
-
-  async sendPix(dto: SendPixDto) {
-    const socket = this.baileys.getSocket(dto.instanceId);
-    if (!socket) throw new BadRequestException('Instância não conectada');
-
-    const to = await this.getValidWhatsAppNumber(socket, dto.to);
-    
-    // Determinar o tipo de chave para exibição
-    const keyTypeLabels: Record<string, string> = {
-      email: 'Email',
-      cpf: 'CPF',
-      cnpj: 'CNPJ',
-      phone: 'Telefone',
-      random: 'Chave aleatória',
-    };
-    const keyTypeLabel = keyTypeLabels[dto.pixKeyType] || 'Chave PIX';
-    
-    // Texto formatado do PIX
-    const pixText = `*${dto.merchantName}*\n${keyTypeLabel}: ${dto.pixKey}`;
-    
-    // Enviar como mensagem interativa com botão de copiar
-    await socket.sendMessage(to, {
-      text: pixText,
-      footer: dto.footer || 'GO-API',
-      interactiveButtons: [
-        {
-          name: 'cta_copy',
-          buttonParamsJson: JSON.stringify({
-            display_text: 'Copiar chave Pix',
-            copy_code: dto.pixKey,
-          }),
-        },
-      ],
-    });
-    
-    return this.saveMessage(dto.instanceId, dto.to, 'PIX', dto);
   }
 
   async sendList(dto: SendListDto) {
