@@ -123,6 +123,57 @@ export class MessagesService {
     return `${cleaned}@s.whatsapp.net`;
   }
 
+  // Verifica se número existe no WhatsApp e tenta com/sem o 9
+  private async getValidWhatsAppNumber(socket: any, phone: string): Promise<string> {
+    let cleaned = phone.replace(/\D/g, '');
+    
+    // Se já tem o formato completo, retorna
+    if (phone.includes('@s.whatsapp.net')) return phone;
+    
+    // Tenta o número original primeiro
+    const jid1 = `${cleaned}@s.whatsapp.net`;
+    try {
+      const [result1] = await socket.onWhatsApp(cleaned);
+      if (result1?.exists) {
+        this.logger.debug(`Número válido encontrado: ${cleaned}`);
+        return result1.jid;
+      }
+    } catch (e) {
+      this.logger.debug(`Erro ao verificar ${cleaned}: ${e.message}`);
+    }
+
+    // Se é número brasileiro (começa com 55), tenta adicionar/remover o 9
+    if (cleaned.startsWith('55') && cleaned.length >= 12) {
+      const ddd = cleaned.substring(2, 4);
+      const rest = cleaned.substring(4);
+      
+      let alternativeNumber: string;
+      
+      if (rest.length === 9 && rest.startsWith('9')) {
+        // Tem 9, tenta sem o 9
+        alternativeNumber = `55${ddd}${rest.substring(1)}`;
+      } else if (rest.length === 8) {
+        // Não tem 9, tenta com o 9
+        alternativeNumber = `55${ddd}9${rest}`;
+      } else {
+        return jid1; // Retorna original se não se encaixa no padrão
+      }
+
+      try {
+        const [result2] = await socket.onWhatsApp(alternativeNumber);
+        if (result2?.exists) {
+          this.logger.debug(`Número alternativo válido encontrado: ${alternativeNumber}`);
+          return result2.jid;
+        }
+      } catch (e) {
+        this.logger.debug(`Erro ao verificar alternativo ${alternativeNumber}: ${e.message}`);
+      }
+    }
+
+    // Retorna o original se nenhum foi encontrado
+    return jid1;
+  }
+
   private async saveMessage(instanceId: string, to: string, type: string, content: any) {
     return this.prisma.message.create({
       data: { instanceId, from: 'me', to, type, content, status: 'SENT' },
@@ -133,7 +184,7 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     await socket.sendMessage(to, { text: dto.text });
     return this.saveMessage(dto.instanceId, dto.to, 'TEXT', { text: dto.text });
   }
@@ -142,10 +193,9 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     
     try {
-      // Tenta baixar a imagem primeiro para evitar erro de fetch
       const imageBuffer = await this.downloadMedia(dto.imageUrl);
       const mimetype = this.getMimeType(dto.imageUrl, 'image');
       
@@ -156,7 +206,6 @@ export class MessagesService {
       });
     } catch (downloadError) {
       this.logger.warn(`Download failed, trying direct URL: ${downloadError.message}`);
-      // Fallback: tenta enviar direto pela URL
       try {
         await socket.sendMessage(to, { image: { url: dto.imageUrl }, caption: dto.caption });
       } catch (urlError) {
@@ -172,22 +221,19 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     
     try {
-      // Baixar o áudio
       const audioBuffer = await this.downloadMedia(dto.audioUrl);
       
       let finalBuffer: Buffer;
       let mimetype: string;
       
       if (dto.ptt !== false) {
-        // Para PTT (voice note), converter para OGG Opus - formato obrigatório para Android/iOS
         this.logger.log('Convertendo áudio para OGG Opus (PTT)...');
         finalBuffer = await this.convertToOggOpus(audioBuffer);
         mimetype = 'audio/ogg; codecs=opus';
       } else {
-        // Para áudio normal (não PTT), usar o formato original
         finalBuffer = audioBuffer;
         mimetype = this.getMimeType(dto.audioUrl, 'audio');
       }
@@ -211,7 +257,7 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     await socket.sendMessage(to, { location: { degreesLatitude: dto.latitude, degreesLongitude: dto.longitude } });
     return this.saveMessage(dto.instanceId, dto.to, 'LOCATION', { latitude: dto.latitude, longitude: dto.longitude });
   }
@@ -220,7 +266,7 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     
     try {
       const videoBuffer = await this.downloadMedia(dto.videoUrl);
@@ -248,7 +294,7 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     const filename = dto.filename || dto.documentUrl.split('/').pop() || 'document';
     
     try {
@@ -282,13 +328,15 @@ export class MessagesService {
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
+    const phoneClean = dto.contactPhone.replace(/\D/g, '');
     
+    // vCard completo com N (nome estruturado) para compatibilidade com Android
     const vcard = `BEGIN:VCARD
 VERSION:3.0
+N:;${dto.contactName};;;
 FN:${dto.contactName}
-TEL;type=CELL;type=VOICE;waid=${dto.contactPhone.replace(/\D/g, '')}:+${dto.contactPhone.replace(/\D/g, '')}
-${dto.organization ? `ORG:${dto.organization}` : ''}
+TEL;type=CELL;type=VOICE;waid=${phoneClean}:+${phoneClean}${dto.organization ? `\nORG:${dto.organization}` : ''}
 END:VCARD`;
 
     await socket.sendMessage(to, {
@@ -305,26 +353,40 @@ END:VCARD`;
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     
-    // Texto formatado do PIX
-    const pixText = `💰 *${dto.title || 'Pagamento PIX'}*\n\n${dto.text}\n\n📦 ${dto.productName || 'Produto'}\n💵 Valor: R$ ${dto.amount.toFixed(2)}\n👤 ${dto.merchantName}`;
+    // Determinar o tipo de chave para exibição
+    const keyTypeLabels: Record<string, string> = {
+      email: 'Email',
+      cpf: 'CPF',
+      cnpj: 'CNPJ',
+      phone: 'Telefone',
+      random: 'Chave aleatória',
+    };
+    const keyTypeLabel = keyTypeLabels[dto.pixKeyType] || 'Chave PIX';
     
-    // Enviar como mensagem interativa com botão de copiar
+    // Enviar como mensagem interativa nativa do WhatsApp (formato de pagamento)
     await socket.sendMessage(to, {
-      text: pixText,
-      footer: dto.footer || 'GO-API',
-      title: '',
-      interactiveButtons: [
-        {
-          name: 'cta_copy',
-          buttonParamsJson: JSON.stringify({
-            fix: true,
-            display_text: '📋 COPIAR CHAVE PIX',
-            copy_code: dto.pixKey,
-          }),
+      interactiveMessage: {
+        header: {
+          title: dto.merchantName,
+          subtitle: `${keyTypeLabel}: ${dto.pixKey}`,
+          hasMediaAttachment: false,
         },
-      ],
+        body: { text: dto.text || `Valor: R$ ${dto.amount.toFixed(2)}` },
+        footer: { text: dto.footer || 'GO-API' },
+        nativeFlowMessage: {
+          buttons: [
+            {
+              name: 'cta_copy',
+              buttonParamsJson: JSON.stringify({
+                display_text: 'Copiar chave Pix',
+                copy_code: dto.pixKey,
+              }),
+            },
+          ],
+        },
+      },
     });
     
     return this.saveMessage(dto.instanceId, dto.to, 'PIX', dto);
@@ -334,7 +396,7 @@ END:VCARD`;
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     
     await socket.sendMessage(to, {
       text: dto.text,
@@ -359,7 +421,7 @@ END:VCARD`;
     const socket = this.baileys.getSocket(dto.instanceId);
     if (!socket) throw new BadRequestException('Instância não conectada');
 
-    const to = this.formatPhone(dto.to);
+    const to = await this.getValidWhatsAppNumber(socket, dto.to);
     await socket.sendMessage(to, {
       poll: { name: dto.question, values: dto.options, selectableCount: dto.selectableCount || 1 },
     });
