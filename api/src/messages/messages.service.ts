@@ -365,28 +365,22 @@ END:VCARD`;
     };
     const keyTypeLabel = keyTypeLabels[dto.pixKeyType] || 'Chave PIX';
     
-    // Enviar como mensagem interativa nativa do WhatsApp (formato de pagamento)
+    // Texto formatado do PIX
+    const pixText = `*${dto.merchantName}*\n${keyTypeLabel}: ${dto.pixKey}`;
+    
+    // Enviar como mensagem interativa com botão de copiar
     await socket.sendMessage(to, {
-      interactiveMessage: {
-        header: {
-          title: dto.merchantName,
-          subtitle: `${keyTypeLabel}: ${dto.pixKey}`,
-          hasMediaAttachment: false,
+      text: pixText,
+      footer: dto.footer || 'GO-API',
+      interactiveButtons: [
+        {
+          name: 'cta_copy',
+          buttonParamsJson: JSON.stringify({
+            display_text: 'Copiar chave Pix',
+            copy_code: dto.pixKey,
+          }),
         },
-        body: { text: dto.text || `Valor: R$ ${dto.amount.toFixed(2)}` },
-        footer: { text: dto.footer || 'GO-API' },
-        nativeFlowMessage: {
-          buttons: [
-            {
-              name: 'cta_copy',
-              buttonParamsJson: JSON.stringify({
-                display_text: 'Copiar chave Pix',
-                copy_code: dto.pixKey,
-              }),
-            },
-          ],
-        },
-      },
+      ],
     });
     
     return this.saveMessage(dto.instanceId, dto.to, 'PIX', dto);
