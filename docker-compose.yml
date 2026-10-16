@@ -26,7 +26,7 @@ services:
     networks: [backend]
 
   api:
-    image: ghcr.io/usegoapi/goapi-api:${GOAPI_VERSION:-latest}
+    image: ${GOAPI_API_IMAGE:-ghcr.io/usegoapi/goapi-api}:${GOAPI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -58,7 +58,7 @@ services:
     networks: [backend, frontend]
 
   frontend:
-    image: ghcr.io/usegoapi/goapi-panel:${GOAPI_VERSION:-latest}
+    image: ${GOAPI_PANEL_IMAGE:-ghcr.io/usegoapi/goapi-panel}:${GOAPI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - api

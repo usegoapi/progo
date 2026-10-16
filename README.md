@@ -105,12 +105,19 @@ Pronto:
 
 ### Imagens Docker
 
-As imagens são publicadas automaticamente a cada versão, para **amd64** e **arm64**, com SBOM e atestado de origem:
+As imagens são publicadas automaticamente a cada versão, para **amd64** e **arm64**, com SBOM e atestado de origem, em dois registries públicos:
 
-| Imagem | Pull |
-|---|---|
-| [API](https://github.com/usegoapi/progo/pkgs/container/goapi-api) | `docker pull ghcr.io/usegoapi/goapi-api:latest` |
-| [Painel](https://github.com/usegoapi/progo/pkgs/container/goapi-panel) | `docker pull ghcr.io/usegoapi/goapi-panel:latest` |
+| Imagem | GitHub Container Registry | Docker Hub |
+|---|---|---|
+| API | [`ghcr.io/usegoapi/goapi-api`](https://github.com/usegoapi/progo/pkgs/container/goapi-api) | [`righettice/progo-api`](https://hub.docker.com/r/righettice/progo-api) |
+| Painel | [`ghcr.io/usegoapi/goapi-panel`](https://github.com/usegoapi/progo/pkgs/container/goapi-panel) | [`righettice/progo-panel`](https://hub.docker.com/r/righettice/progo-panel) |
+
+O `docker-compose.yml` usa o GHCR por padrão. Para baixar do Docker Hub, adicione ao `.env`:
+
+```env
+GOAPI_API_IMAGE=righettice/progo-api
+GOAPI_PANEL_IMAGE=righettice/progo-panel
+```
 
 Para fixar uma versão, defina `GOAPI_VERSION` no `.env` (ex: `2.0.0`). Para compilar a partir do código:
 

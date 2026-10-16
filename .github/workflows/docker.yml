@@ -1,7 +1,7 @@
 name: Docker images
 
 # Publica as imagens da API e do painel no GitHub Container Registry (ghcr.io)
-# e, se os secrets DOCKERHUB_USERNAME/DOCKERHUB_TOKEN existirem, também no Docker Hub.
+# e, se os secrets DOCKERHUB_USERNAME/DOCKERHUB_TOKEN existirem, também no Docker Hub (<usuario>/progo-api e <usuario>/progo-panel).
 on:
   push:
     branches: [main]
@@ -33,10 +33,12 @@ jobs:
       matrix:
         include:
           - image: goapi-api
+            hub: progo-api
             dockerfile: api/Dockerfile
             title: GO-API · API
             description: API de WhatsApp open source (NestJS + Baileys)
           - image: goapi-panel
+            hub: progo-panel
             dockerfile: frontend/Dockerfile
             title: GO-API · Painel
             description: Painel whitelabel do GO-API (Next.js)
@@ -74,7 +76,7 @@ jobs:
           {
             echo 'list<<EOF'
             echo "ghcr.io/${owner}/${{ matrix.image }}"
-            if [ "${HAS_DOCKERHUB}" = "true" ]; then echo "docker.io/${DOCKERHUB_USERNAME}/${{ matrix.image }}"; fi
+            if [ "${HAS_DOCKERHUB}" = "true" ]; then echo "docker.io/${DOCKERHUB_USERNAME}/${{ matrix.hub }}"; fi
             echo 'EOF'
             echo "ghcr=ghcr.io/${owner}/${{ matrix.image }}"
           } >> "$GITHUB_OUTPUT"
