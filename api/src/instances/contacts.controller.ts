@@ -1,73 +1,57 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { InstanceAccessGuard } from '../auth/instance-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { jidToPhone } from '../common/utils/jid';
 import { BaileysService } from './baileys.service';
 
 @Controller('instances/:instanceId/contacts')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, InstanceAccessGuard)
 export class ContactsController {
-  constructor(private baileys: BaileysService) {}
+  constructor(private readonly baileys: BaileysService) {}
 
   @Get('groups')
   async getGroups(@Param('instanceId') instanceId: string) {
-    const socket = this.baileys.getSocket(instanceId);
-    if (!socket) return { groups: [] };
-    
-    try {
-      const groups = await socket.groupFetchAllParticipating();
-      const groupList = Object.values(groups).map((g: any) => ({
-        id: g.id,
-        name: g.subject,
-        participants: g.participants?.length || 0,
-        creation: g.creation,
-        owner: g.owner,
-      }));
-      return { groups: groupList };
-    } catch (e) {
-      return { groups: [] };
-    }
+    if (!this.baileys.getSocket(instanceId)) return { groups: [] };
+    const groups = await this.baileys.getAllGroups(instanceId);
+    return {
+      groups: groups
+        .map((g) => ({
+          id: g.id,
+          name: g.subject,
+          participants: g.participants?.length ?? 0,
+          creation: g.creation,
+          owner: g.owner,
+        }))
+        .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')),
+    };
   }
 
   @Get('groups/:groupId/participants')
   async getGroupParticipants(@Param('instanceId') instanceId: string, @Param('groupId') groupId: string) {
-    const socket = this.baileys.getSocket(instanceId);
-    if (!socket) return { participants: [] };
-    
-    try {
-      const metadata = await socket.groupMetadata(groupId);
-      const participants = metadata.participants.map((p: any) => ({
-        id: p.id,
-        phone: p.id.split('@')[0],
-        admin: p.admin || null,
-      }));
-      return { 
-        groupName: metadata.subject,
-        groupId: metadata.id,
-        participants 
-      };
-    } catch (e) {
-      return { participants: [] };
-    }
+    if (!this.baileys.getSocket(instanceId) || !groupId.endsWith('@g.us')) return { participants: [] };
+    const metadata = await this.baileys.getGroupMetadata(instanceId, groupId);
+    return {
+      groupName: metadata.subject,
+      groupId: metadata.id,
+      participants: metadata.participants.map((p: any) => {
+        const pn = p.phoneNumber || (p.id?.endsWith('@s.whatsapp.net') ? p.id : null);
+        return {
+          id: p.id,
+          phone: pn ? jidToPhone(pn) : '',
+          admin: p.admin || null,
+          name: this.baileys.getContactName(instanceId, pn || p.id),
+        };
+      }),
+    };
   }
 
   @Get('all')
-  async getAllContacts(@Param('instanceId') instanceId: string) {
-    const socket = this.baileys.getSocket(instanceId);
-    if (!socket) return { contacts: [] };
-    
-    try {
-      const store = socket.store;
-      if (!store?.contacts) return { contacts: [] };
-      
-      const contacts = Object.values(store.contacts)
-        .filter((c: any) => c.id && !c.id.endsWith('@g.us') && !c.id.endsWith('@broadcast'))
-        .map((c: any) => ({
-          id: c.id,
-          phone: c.id.split('@')[0],
-          name: c.name || c.notify || c.verifiedName || null,
-        }));
-      return { contacts };
-    } catch (e) {
-      return { contacts: [] };
-    }
+  getAllContacts(@Param('instanceId') instanceId: string, @Query('search') search?: string) {
+    const term = search?.trim().toLowerCase();
+    const contacts = this.baileys
+      .getContacts(instanceId)
+      .filter((c) => !term || c.phone.includes(term) || c.name?.toLowerCase().includes(term))
+      .slice(0, 5_000);
+    return { contacts };
   }
 }

@@ -3,11 +3,15 @@ node_modules/
 
 # Build
 dist/
+*.tsbuildinfo
 
 # Environment
 .env
 .env.local
 .env.production
+
+# Sessões do WhatsApp (credenciais!)
+sessions/
 
 # Logs
 *.log
@@ -20,14 +24,3 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
-
-# Prisma
-prisma/*.db
-prisma/*.db-journal
-
-# ============================================
-# ARQUIVOS SENSÍVEIS - NÃO COMMITAR!
-# ============================================
-# O arquivo messages.service.ts contém lógica proprietária
-# Apenas o .js ofuscado deve ir para o repositório público
-src/messages/messages.service.ts

@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
-import { MessagesController } from './messages.controller';
-import { ApiController } from './api.controller';
-import { MessagesService } from './messages.service';
 import { InstancesModule } from '../instances/instances.module';
-import { AuthModule } from '../auth/auth.module';
-import { ApiKeyGuard } from '../auth/api-key.guard';
+import { ApiController } from './api.controller';
+import { MessagesController } from './messages.controller';
+import { InteractiveMessagesService } from './interactive-messages.service';
+import { MessagesService } from './messages.service';
 
 @Module({
-  imports: [InstancesModule, AuthModule],
+  imports: [InstancesModule],
   controllers: [MessagesController, ApiController],
-  providers: [MessagesService, ApiKeyGuard],
+  providers: [MessagesService, InteractiveMessagesService],
+  exports: [MessagesService],
 })
 export class MessagesModule {}

@@ -1,96 +1,53 @@
-FROM node:20-alpine
+# syntax=docker/dockerfile:1
+# =============================================================
+# GO-API · Backend (NestJS + Baileys)
+# Contexto de build: raiz do repositório
+# =============================================================
 
-RUN apk add --no-cache curl git python3 make g++ openssl ffmpeg
-
+# ---------- Build ----------
+FROM node:22-alpine AS build
+RUN apk add --no-cache git python3 make g++ openssl
 WORKDIR /app
 
-# =============================================
-# BAILEYS - Copiar apenas arquivos pré-compilados
-# =============================================
-RUN mkdir -p ./baileys/lib ./baileys/WAProto
+# Baileys vendorizada (somente os arquivos pré-compilados)
+COPY baileys/package.json baileys/engine-requirements.js baileys/LICENSE ./baileys/
+COPY baileys/lib ./baileys/lib
+COPY baileys/WAProto ./baileys/WAProto
 
-COPY baileys/engine-requirements.js ./baileys/
-COPY baileys/lib/ ./baileys/lib/
-COPY baileys/WAProto/ ./baileys/WAProto/
+# Dependências da API (install-links=true instala a Baileys como pacote normal)
+WORKDIR /app/api
+COPY api/package.json api/.npmrc ./
+RUN npm install --no-audit --no-fund
 
-# Criar package.json limpo do Baileys SEM scripts de build
-RUN cat > ./baileys/package.json << 'EOF'
-{
-  "name": "baileys",
-  "type": "module",
-  "version": "7.0.0-rc.9",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "scripts": {},
-  "dependencies": {
-    "@cacheable/node-cache": "^1.4.0",
-    "@hapi/boom": "^9.1.3",
-    "async-mutex": "^0.5.0",
-    "libsignal": "git+https://github.com/whiskeysockets/libsignal-node",
-    "lru-cache": "^11.1.0",
-    "music-metadata": "^11.7.0",
-    "node-addon-api": "^8.5.0",
-    "p-queue": "^9.0.0",
-    "pino": "^9.6",
-    "protobufjs": "^7.2.4",
-    "ws": "^8.13.0"
-  },
-  "peerDependencies": {
-    "jimp": "^1.6.0",
-    "link-preview-js": "^3.0.0",
-    "sharp": "*"
-  },
-  "peerDependenciesMeta": {
-    "jimp": { "optional": true },
-    "link-preview-js": { "optional": true }
-  }
-}
-EOF
-
-# =============================================
-# API - Instalar dependências
-# =============================================
-COPY api/package*.json ./
-
-RUN sed -i 's|"baileys": "file:../baileys"|"baileys": "file:./baileys"|g' package.json
-
-RUN npm install --legacy-peer-deps
-
-# =============================================
-# PRISMA - Gerar cliente
-# =============================================
-COPY api/prisma/ ./prisma/
+COPY api/prisma ./prisma
 RUN npx prisma generate
 
-# =============================================
-# BUILD - Compilar TypeScript
-# =============================================
-COPY api/src/ ./src/
-COPY api/nest-cli.json ./
-COPY api/tsconfig.json ./
+COPY api/tsconfig.json api/nest-cli.json ./
+COPY api/src ./src
+RUN npx nest build && npm prune --omit=dev
 
-# Build usando npx diretamente
-RUN npx nest build
+# ---------- Runtime ----------
+FROM node:22-alpine AS runtime
+RUN apk add --no-cache ffmpeg openssl tini curl
+ENV NODE_ENV=production \
+    PORT=3001 \
+    SESSIONS_DIR=/app/sessions \
+    FFMPEG_PATH=/usr/bin/ffmpeg
 
-# Verificar se o build foi criado (pode estar em dist/ ou dist/src/)
-RUN ls -la dist/ && (test -f dist/main.js || test -f dist/src/main.js)
+WORKDIR /app
+COPY --from=build --chown=node:node /app/api/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/api/dist ./dist
+COPY --from=build --chown=node:node /app/api/prisma ./prisma
+COPY --from=build --chown=node:node /app/api/package.json ./package.json
+COPY --chown=node:node api/docker-entrypoint.sh ./docker-entrypoint.sh
+
+RUN chmod +x ./docker-entrypoint.sh && mkdir -p /app/sessions && chown -R node:node /app/sessions
+USER node
 
 EXPOSE 3001
+VOLUME ["/app/sessions"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:${PORT}/health || exit 1
 
-# Criar script de inicialização
-RUN cat > /app/start.sh << 'EOF'
-#!/bin/sh
-set -e
-echo "🔄 Running Prisma db push..."
-npx prisma db push --accept-data-loss
-echo "✅ Database schema synced!"
-echo "🚀 Starting API..."
-if [ -f dist/main.js ]; then
-  node dist/main.js
-else
-  node dist/src/main.js
-fi
-EOF
-RUN chmod +x /app/start.sh
-
-CMD ["/app/start.sh"]
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["./docker-entrypoint.sh"]

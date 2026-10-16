@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
+import { Copyright } from '@/lib/branding';
+
 
 interface Instance {
   id: string;
@@ -80,6 +82,7 @@ export default function Instances() {
   const pollQrCode = async (id: string, name: string) => {
     let shouldPoll = true;
     let pollCount = 0;
+    let shareGenerated = false; // um único link por abertura do modal
     const maxPolls = 60; // Máximo de 60 tentativas (3 minutos com intervalo de 3s)
     
     const poll = async () => {
@@ -96,7 +99,10 @@ export default function Instances() {
         
         if (data.qrCode) {
           setQrModal({ id, name, qr: data.qrCode, connected: false, connecting: false });
-          generateShareLink(id);
+          if (!shareGenerated) {
+            shareGenerated = true;
+            generateShareLink(id);
+          }
         }
         
         if (data.status === 'CONNECTED') {
@@ -332,7 +338,7 @@ export default function Instances() {
             </div>
             <button
               onClick={() => setApiError(null)}
-              className="w-full py-2.5 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all text-sm"
+              className="w-full py-2.5 rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-hover transition-all text-sm"
             >
               Entendi
             </button>
@@ -418,7 +424,7 @@ export default function Instances() {
                   </div>
                   <button
                     onClick={() => setQrModal(null)}
-                    className="w-full py-2.5 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all text-sm"
+                    className="w-full py-2.5 rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-hover transition-all text-sm"
                   >
                     Fechar
                   </button>
@@ -601,7 +607,7 @@ export default function Instances() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => restartInstance(instance.id)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary hover:text-black hover:border-transparent transition-all active:scale-[0.98]"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary hover:text-on-primary hover:border-transparent transition-all active:scale-[0.98]"
                     title="Reiniciar sem perder sessão"
                   >
                     <span className="material-symbols-outlined text-[20px]">refresh</span>
@@ -618,7 +624,7 @@ export default function Instances() {
               ) : (
                 <button
                   onClick={() => generateQrCode(instance.id, instance.name)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary hover:text-black hover:border-transparent transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary hover:text-on-primary hover:border-transparent transition-all active:scale-[0.98]"
                 >
                   <span className="material-symbols-outlined text-[20px]">qr_code_2</span>
                   Gerar QR Code
@@ -660,8 +666,8 @@ export default function Instances() {
           onClick={() => setShowCreate(true)}
           className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border-dark bg-surface-dark/30 p-6 transition-all duration-300 hover:border-primary hover:bg-surface-dark hover:shadow-glow min-h-[280px]"
         >
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-surface-light shadow-lg ring-1 ring-border-dark transition-all duration-300 group-hover:scale-110 group-hover:bg-primary group-hover:text-black group-hover:ring-primary/50">
-            <span className="material-symbols-outlined text-4xl text-slate-500 group-hover:text-black transition-colors">
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-surface-light shadow-lg ring-1 ring-border-dark transition-all duration-300 group-hover:scale-110 group-hover:bg-primary group-hover:text-on-primary group-hover:ring-primary/50">
+            <span className="material-symbols-outlined text-4xl text-slate-500 group-hover:text-on-primary transition-colors">
               add
             </span>
           </div>
@@ -705,7 +711,7 @@ export default function Instances() {
               <button
                 onClick={saveEditName}
                 disabled={loading || !editName.trim()}
-                className="flex-1 py-2.5 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all text-sm disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-hover transition-all text-sm disabled:opacity-50"
               >
                 {loading ? 'Salvando...' : 'Salvar'}
               </button>
@@ -736,7 +742,7 @@ export default function Instances() {
               <button
                 onClick={createInstance}
                 disabled={loading || !newName.trim()}
-                className="flex-1 py-3 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all disabled:opacity-50"
+                className="flex-1 py-3 rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-hover transition-all disabled:opacity-50"
               >
                 {loading ? 'Criando...' : 'Criar'}
               </button>
@@ -747,7 +753,7 @@ export default function Instances() {
 
       {/* Footer */}
       <div className="mt-12 border-t border-border-dark/50 pt-6 text-center">
-        <p className="text-sm text-slate-600">© 2025 GO-API todos direitos reservados.</p>
+        <Copyright />
       </div>
     </Layout>
   );

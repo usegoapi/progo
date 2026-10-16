@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import Layout from '@/components/Layout';
-import api from '@/lib/api';
+import api, { apiErrorMessage } from '@/lib/api';
+import { brandColor, Copyright } from '@/lib/branding';
 
 interface Webhook {
   id: string;
   url: string;
   events: string[];
   active: boolean;
-  secret?: string;
+  hasSecret?: boolean;
 }
 
 const availableEvents = [
@@ -15,7 +17,14 @@ const availableEvents = [
   { id: 'message_sent', label: 'Mensagem Enviada', icon: 'send' },
   { id: 'instance_status', label: 'Status da Instância', icon: 'wifi' },
   { id: 'qr_code_updated', label: 'QR Code Atualizado', icon: 'qr_code_2' },
+  { id: 'MESSAGES_UPDATE', label: 'Entregue / Lida', icon: 'done_all' },
+  { id: 'CALL', label: 'Chamadas', icon: 'call' },
 ];
+
+const eventLabel = (id: string) => availableEvents.find((e) => e.id === id)?.label ?? id;
+
+const notify = (icon: 'success' | 'error' | 'info', title: string, text?: string) =>
+  Swal.fire({ icon, title, text, background: '#1a1a1a', color: '#fff', confirmButtonColor: brandColor() });
 
 export default function Webhooks() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -42,8 +51,19 @@ export default function Webhooks() {
       setNewWebhook({ url: '', events: [], secret: '' });
       setShowCreate(false);
       loadWebhooks();
-    } catch {}
+    } catch (err) {
+      notify('error', 'Não foi possível criar o webhook', apiErrorMessage(err));
+    }
     setLoading(false);
+  };
+
+  const testWebhook = async (id: string) => {
+    try {
+      const { data } = await api.post(`/webhooks/${id}/test`);
+      notify(data.success ? 'success' : 'error', data.success ? 'Entrega OK' : 'Falha na entrega', data.message);
+    } catch (err) {
+      notify('error', 'Erro', apiErrorMessage(err));
+    }
   };
 
   const toggleEvent = (eventId: string) => {
@@ -63,11 +83,23 @@ export default function Webhooks() {
   };
 
   const deleteWebhook = async (id: string) => {
-    if (!confirm('Deletar este webhook?')) return;
+    const { isConfirmed } = await Swal.fire({
+      icon: 'warning',
+      title: 'Remover webhook?',
+      showCancelButton: true,
+      confirmButtonText: 'Remover',
+      cancelButtonText: 'Cancelar',
+      background: '#1a1a1a',
+      color: '#fff',
+      confirmButtonColor: '#ef4444',
+    });
+    if (!isConfirmed) return;
     try {
       await api.delete(`/webhooks/${id}`);
       loadWebhooks();
-    } catch {}
+    } catch (err) {
+      notify('error', 'Erro', apiErrorMessage(err));
+    }
   };
 
   return (
@@ -81,7 +113,7 @@ export default function Webhooks() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all"
+          className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all"
         >
           <span className="material-symbols-outlined">add</span>
           Novo Webhook
@@ -109,15 +141,29 @@ export default function Webhooks() {
                           key={event}
                           className="px-2 py-1 bg-surface-light rounded text-xs text-slate-400"
                         >
-                          {event}
+                          {eventLabel(event)}
                         </span>
                       ))}
+                      {webhook.hasSecret && (
+                        <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                          Assinado
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => testWebhook(webhook.id)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-surface-light text-slate-300 hover:text-white transition-all flex items-center gap-1"
+                  title="Enviar evento de teste"
+                >
+                  <span className="material-symbols-outlined text-[18px]">send</span>
+                  Testar
+                </button>
                 <button
                   onClick={() => toggleActive(webhook.id, webhook.active)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -218,7 +264,7 @@ export default function Webhooks() {
               <button
                 onClick={createWebhook}
                 disabled={loading || !newWebhook.url || newWebhook.events.length === 0}
-                className="flex-1 py-3 rounded-lg bg-primary text-black font-bold hover:bg-primary-hover transition-all disabled:opacity-50"
+                className="flex-1 py-3 rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-hover transition-all disabled:opacity-50"
               >
                 {loading ? 'Criando...' : 'Criar Webhook'}
               </button>
@@ -229,7 +275,7 @@ export default function Webhooks() {
 
       {/* Footer */}
       <div className="mt-12 border-t border-border-dark/50 pt-6 text-center">
-        <p className="text-sm text-slate-600">© 2025 GO-API todos direitos reservados.</p>
+        <Copyright />
       </div>
     </Layout>
   );

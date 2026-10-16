@@ -2,9 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Valores padrão; sobrescritos em runtime pela cor da marca (whitelabel). */
 :root {
+  --primary-rgb: 234 168 0;
+  --primary-hover-rgb: 215 155 0;
+  --on-primary-rgb: 0 0 0;
   --primary: #eaa800;
-  --primary-hover: #dba000;
   --background-dark: #0d0d0d;
   --surface-dark: #161616;
   --surface-light: #1f1f1f;
@@ -13,7 +16,7 @@
 
 body {
   background-color: #0d0d0d;
-  background-image: radial-gradient(circle at 50% 0%, rgba(234, 168, 0, 0.05) 0%, transparent 50%);
+  background-image: radial-gradient(circle at 50% 0%, rgb(var(--primary-rgb) / 0.05) 0%, transparent 50%);
 }
 
 ::-webkit-scrollbar {
@@ -31,7 +34,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #eaa800;
+  background: rgb(var(--primary-rgb));
 }
 
 .material-symbols-outlined {

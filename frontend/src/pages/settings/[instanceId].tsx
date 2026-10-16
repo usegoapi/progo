@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
-import api from '@/lib/api';
+import api, { apiErrorMessage } from '@/lib/api';
 import Swal from 'sweetalert2';
+import { Copyright } from '@/lib/branding';
+
 
 // Types
 interface Instance {
@@ -311,11 +313,13 @@ export default function InstanceSettingsPage() {
     if (!instanceId) return;
     setSaving(section);
     try {
-      await api.put(`/instances/${instanceId}/settings`, data);
+      const { data: saved } = await api.put(`/instances/${instanceId}/settings`, data);
       Swal.fire({
         icon: 'success',
         title: 'Salvo!',
-        text: 'Configurações salvas com sucesso.',
+        text: saved?.restartRequired
+          ? 'Configurações salvas. Reinicie a instância para aplicar o novo proxy.'
+          : 'Configurações salvas com sucesso.',
         background: '#1a1a1a',
         color: '#fff',
         confirmButtonColor: '#22c55e',
@@ -324,11 +328,10 @@ export default function InstanceSettingsPage() {
         showConfirmButton: false,
       });
     } catch (error) {
-      console.error('Error saving:', error);
       Swal.fire({
         icon: 'error',
         title: 'Erro!',
-        text: 'Não foi possível salvar as configurações.',
+        text: apiErrorMessage(error, 'Não foi possível salvar as configurações.'),
         background: '#1a1a1a',
         color: '#fff',
         confirmButtonColor: '#ef4444',
@@ -441,7 +444,7 @@ export default function InstanceSettingsPage() {
                 <button
                   onClick={() => saveSection('behavior', instanceSettings)}
                   disabled={saving === 'behavior'}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-[20px]">{saving === 'behavior' ? 'sync' : 'save'}</span>
                   {saving === 'behavior' ? 'Salvando...' : 'Salvar'}
@@ -477,7 +480,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Configure um proxy para a conexão</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('proxy', { proxy: proxySettings })} disabled={saving === 'proxy'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('proxy', { proxy: proxySettings })} disabled={saving === 'proxy'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'proxy' ? 'sync' : 'save'}</span>
                   {saving === 'proxy' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -518,7 +521,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Receba eventos via HTTP POST</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('webhook', { webhook: webhookSettings })} disabled={saving === 'webhook'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('webhook', { webhook: webhookSettings })} disabled={saving === 'webhook'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'webhook' ? 'sync' : 'save'}</span>
                   {saving === 'webhook' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -549,7 +552,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Receba eventos em tempo real via WebSocket</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('websocket', { websocket: websocketSettings })} disabled={saving === 'websocket'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('websocket', { websocket: websocketSettings })} disabled={saving === 'websocket'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'websocket' ? 'sync' : 'save'}</span>
                   {saving === 'websocket' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -579,7 +582,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Envie eventos para filas RabbitMQ</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('rabbitmq', { rabbitmq: rabbitmqSettings })} disabled={saving === 'rabbitmq'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('rabbitmq', { rabbitmq: rabbitmqSettings })} disabled={saving === 'rabbitmq'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'rabbitmq' ? 'sync' : 'save'}</span>
                   {saving === 'rabbitmq' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -611,7 +614,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Envie eventos para filas Amazon SQS</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('sqs', { sqs: sqsSettings })} disabled={saving === 'sqs'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('sqs', { sqs: sqsSettings })} disabled={saving === 'sqs'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'sqs' ? 'sync' : 'save'}</span>
                   {saving === 'sqs' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -649,7 +652,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Integre com fluxos de automação</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('n8n', { n8n: n8nSettings })} disabled={saving === 'n8n'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('n8n', { n8n: n8nSettings })} disabled={saving === 'n8n'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'n8n' ? 'sync' : 'save'}</span>
                   {saving === 'n8n' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -698,7 +701,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Conecte com chatbots do Typebot</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('typebot', { typebot: typebotSettings })} disabled={saving === 'typebot'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('typebot', { typebot: typebotSettings })} disabled={saving === 'typebot'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'typebot' ? 'sync' : 'save'}</span>
                   {saving === 'typebot' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -745,7 +748,7 @@ export default function InstanceSettingsPage() {
                     <p className="text-slate-400 text-sm">Sincronize conversas com o Chatwoot</p>
                   </div>
                 </div>
-                <button onClick={() => saveSection('chatwoot', { chatwoot: chatwootSettings })} disabled={saving === 'chatwoot'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all disabled:opacity-50">
+                <button onClick={() => saveSection('chatwoot', { chatwoot: chatwootSettings })} disabled={saving === 'chatwoot'} className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-xl transition-all disabled:opacity-50">
                   <span className="material-symbols-outlined text-[20px]">{saving === 'chatwoot' ? 'sync' : 'save'}</span>
                   {saving === 'chatwoot' ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -786,7 +789,7 @@ export default function InstanceSettingsPage() {
 
       {/* Footer */}
       <div className="mt-12 border-t border-border-dark/50 pt-6 text-center">
-        <p className="text-sm text-slate-600">© 2025 GO-API todos direitos reservados.</p>
+        <Copyright />
       </div>
     </Layout>
   );

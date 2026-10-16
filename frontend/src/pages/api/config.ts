@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { readPublicConfig } from '@/lib/branding';
 
-// Esta API route roda no servidor e tem acesso às variáveis de ambiente
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  res.status(200).json({
-    adminEmail: process.env.ADMIN_EMAIL || 'admin@goapi.com',
-    adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
-    apiUrl: process.env.API_URL || '',
-  });
+/**
+ * Configuração pública do painel (marca + URL da API).
+ * Nunca retorne segredos aqui: esta rota é acessível sem autenticação.
+ */
+export default function handler(_req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.status(200).json(readPublicConfig());
 }

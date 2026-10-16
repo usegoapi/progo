@@ -1,378 +1,140 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, ValidateNested, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class CreateInstanceDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(60)
   name: string;
 }
 
-export class UpdateInstanceDto {
-  @IsString()
-  @IsNotEmpty()
-  name: string;
+export class UpdateInstanceDto extends CreateInstanceDto {}
+
+class EventsDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional() @IsArray() @IsString({ each: true }) events?: string[];
 }
 
 export class ProxySettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  protocol?: string; // http | https | socks4 | socks5
-
-  @IsString()
-  @IsOptional()
-  host?: string;
-
-  @IsNumber()
-  @IsOptional()
-  port?: number;
-
-  @IsString()
-  @IsOptional()
-  username?: string;
-
-  @IsString()
-  @IsOptional()
-  password?: string;
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional() @IsIn(['http', 'https', 'socks4', 'socks5']) protocol?: string;
+  @IsOptional() @IsString() @MaxLength(255) host?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(65535) port?: number;
+  @IsOptional() @IsString() @MaxLength(255) username?: string;
+  @IsOptional() @IsString() @MaxLength(255) password?: string;
 }
 
-export class WebhookSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  url?: string;
-
-  @IsArray()
-  @IsOptional()
-  events?: string[];
+export class WebhookSettingsDto extends EventsDto {
+  @IsOptional() @IsString() @MaxLength(2048) url?: string;
+  @IsOptional() @IsString() @MaxLength(255) secret?: string;
 }
 
-export class WebSocketSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
+export class WebSocketSettingsDto extends EventsDto {}
 
-  @IsArray()
-  @IsOptional()
-  events?: string[];
+export class RabbitMQSettingsDto extends EventsDto {
+  @IsOptional() @IsString() @MaxLength(2048) uri?: string;
+  @IsOptional() @IsString() @MaxLength(255) exchange?: string;
 }
 
-export class RabbitMQSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  uri?: string;
-
-  @IsString()
-  @IsOptional()
-  exchange?: string;
-
-  @IsArray()
-  @IsOptional()
-  events?: string[];
+export class SQSSettingsDto extends EventsDto {
+  @IsOptional() @IsString() @MaxLength(255) accessKeyId?: string;
+  @IsOptional() @IsString() @MaxLength(255) secretAccessKey?: string;
+  @IsOptional() @IsString() @MaxLength(64) region?: string;
+  @IsOptional() @IsString() @MaxLength(2048) queueUrl?: string;
 }
 
-export class SQSSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  accessKeyId?: string;
-
-  @IsString()
-  @IsOptional()
-  secretAccessKey?: string;
-
-  @IsString()
-  @IsOptional()
-  region?: string;
-
-  @IsString()
-  @IsOptional()
-  queueUrl?: string;
-
-  @IsArray()
-  @IsOptional()
-  events?: string[];
+export class BotSettingsDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional() @IsIn(['keyword', 'all', 'advanced', 'none']) triggerType?: string;
+  @IsOptional() @IsIn(['contains', 'equals', 'startsWith', 'endsWith', 'regex']) triggerOperator?: string;
+  @IsOptional() @IsString() @MaxLength(500) keyword?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) expireMinutes?: number;
+  @IsOptional() @IsString() @MaxLength(100) keywordFinish?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(60_000) delayMessage?: number;
+  @IsOptional() @IsString() @MaxLength(2000) unknownMessage?: string;
+  @IsOptional() @IsBoolean() listeningFromMe?: boolean;
+  @IsOptional() @IsBoolean() stopBotFromMe?: boolean;
+  @IsOptional() @IsBoolean() keepOpen?: boolean;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(300) debounceTime?: number;
 }
 
-export class TypebotSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  apiUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  publicName?: string;
-
-  @IsString()
-  @IsOptional()
-  triggerType?: string;
-
-  @IsString()
-  @IsOptional()
-  triggerOperator?: string;
-
-  @IsString()
-  @IsOptional()
-  keyword?: string;
-
-  @IsNumber()
-  @IsOptional()
-  expireMinutes?: number;
-
-  @IsString()
-  @IsOptional()
-  keywordFinish?: string;
-
-  @IsNumber()
-  @IsOptional()
-  delayMessage?: number;
-
-  @IsString()
-  @IsOptional()
-  unknownMessage?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  listeningFromMe?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  stopBotFromMe?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  keepOpen?: boolean;
-
-  @IsNumber()
-  @IsOptional()
-  debounceTime?: number;
+export class TypebotSettingsDto extends BotSettingsDto {
+  @IsOptional() @IsString() @MaxLength(2048) apiUrl?: string;
+  @IsOptional() @IsString() @MaxLength(255) publicName?: string;
 }
 
-export class N8nSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  webhookUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  basicAuthUser?: string;
-
-  @IsString()
-  @IsOptional()
-  basicAuthPassword?: string;
-
-  @IsString()
-  @IsOptional()
-  triggerType?: string;
-
-  @IsString()
-  @IsOptional()
-  triggerOperator?: string;
-
-  @IsString()
-  @IsOptional()
-  keyword?: string;
-
-  @IsNumber()
-  @IsOptional()
-  expireMinutes?: number;
-
-  @IsString()
-  @IsOptional()
-  keywordFinish?: string;
-
-  @IsNumber()
-  @IsOptional()
-  delayMessage?: number;
-
-  @IsString()
-  @IsOptional()
-  unknownMessage?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  listeningFromMe?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  stopBotFromMe?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  keepOpen?: boolean;
-
-  @IsNumber()
-  @IsOptional()
-  debounceTime?: number;
-
-  @IsBoolean()
-  @IsOptional()
-  splitMessages?: boolean;
+export class N8nSettingsDto extends BotSettingsDto {
+  @IsOptional() @IsString() @MaxLength(2048) webhookUrl?: string;
+  @IsOptional() @IsString() @MaxLength(255) basicAuthUser?: string;
+  @IsOptional() @IsString() @MaxLength(255) basicAuthPassword?: string;
+  @IsOptional() @IsBoolean() splitMessages?: boolean;
 }
 
 export class ChatwootSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
-
-  @IsString()
-  @IsOptional()
-  url?: string;
-
-  @IsString()
-  @IsOptional()
-  accountId?: string;
-
-  @IsString()
-  @IsOptional()
-  token?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  signMessages?: boolean;
-
-  @IsString()
-  @IsOptional()
-  signDelimiter?: string;
-
-  @IsString()
-  @IsOptional()
-  nameInbox?: string;
-
-  @IsString()
-  @IsOptional()
-  organization?: string;
-
-  @IsString()
-  @IsOptional()
-  logo?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  conversationPending?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  reopenConversation?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  importContacts?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  importMessages?: boolean;
-
-  @IsNumber()
-  @IsOptional()
-  daysLimitImport?: number;
-
-  @IsString()
-  @IsOptional()
-  ignoreJids?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  autoCreate?: boolean;
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional() @IsString() @MaxLength(2048) url?: string;
+  @IsOptional() @IsString() @MaxLength(32) accountId?: string;
+  @IsOptional() @IsString() @MaxLength(255) token?: string;
+  @IsOptional() @IsBoolean() signMessages?: boolean;
+  @IsOptional() @IsString() @MaxLength(20) signDelimiter?: string;
+  @IsOptional() @IsString() @MaxLength(120) nameInbox?: string;
+  @IsOptional() @IsString() @MaxLength(120) organization?: string;
+  @IsOptional() @IsString() @MaxLength(2048) logo?: string;
+  @IsOptional() @IsBoolean() conversationPending?: boolean;
+  @IsOptional() @IsBoolean() reopenConversation?: boolean;
+  @IsOptional() @IsBoolean() importContacts?: boolean;
+  @IsOptional() @IsBoolean() importMessages?: boolean;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(365) daysLimitImport?: number;
+  @IsOptional() @IsString() @MaxLength(4000) ignoreJids?: string;
+  @IsOptional() @IsBoolean() autoCreate?: boolean;
 }
 
 export class UpdateSettingsDto {
-  @IsBoolean()
-  @IsOptional()
-  rejectCalls?: boolean;
+  @IsOptional() @IsBoolean() rejectCalls?: boolean;
+  @IsOptional() @IsString() @MaxLength(1000) rejectCallMessage?: string;
+  @IsOptional() @IsBoolean() ignoreGroups?: boolean;
+  @IsOptional() @IsBoolean() alwaysOnline?: boolean;
+  @IsOptional() @IsBoolean() readMessages?: boolean;
+  @IsOptional() @IsBoolean() syncFullHistory?: boolean;
+  @IsOptional() @IsBoolean() readStatus?: boolean;
 
-  @IsBoolean()
-  @IsOptional()
-  ignoreGroups?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  alwaysOnline?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  readMessages?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  syncFullHistory?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  readStatus?: boolean;
-
-  @ValidateNested()
-  @Type(() => ProxySettingsDto)
-  @IsOptional()
-  proxy?: ProxySettingsDto;
-
-  @ValidateNested()
-  @Type(() => WebhookSettingsDto)
-  @IsOptional()
-  webhook?: WebhookSettingsDto;
-
-  @ValidateNested()
-  @Type(() => WebSocketSettingsDto)
-  @IsOptional()
-  websocket?: WebSocketSettingsDto;
-
-  @ValidateNested()
-  @Type(() => RabbitMQSettingsDto)
-  @IsOptional()
-  rabbitmq?: RabbitMQSettingsDto;
-
-  @ValidateNested()
-  @Type(() => SQSSettingsDto)
-  @IsOptional()
-  sqs?: SQSSettingsDto;
-
-  @ValidateNested()
-  @Type(() => TypebotSettingsDto)
-  @IsOptional()
-  typebot?: TypebotSettingsDto;
-
-  @ValidateNested()
-  @Type(() => N8nSettingsDto)
-  @IsOptional()
-  n8n?: N8nSettingsDto;
-
-  @ValidateNested()
-  @Type(() => ChatwootSettingsDto)
-  @IsOptional()
-  chatwoot?: ChatwootSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => ProxySettingsDto) proxy?: ProxySettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => WebhookSettingsDto) webhook?: WebhookSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => WebSocketSettingsDto) websocket?: WebSocketSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => RabbitMQSettingsDto) rabbitmq?: RabbitMQSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => SQSSettingsDto) sqs?: SQSSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => TypebotSettingsDto) typebot?: TypebotSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => N8nSettingsDto) n8n?: N8nSettingsDto;
+  @IsOptional() @ValidateNested() @Type(() => ChatwootSettingsDto) chatwoot?: ChatwootSettingsDto;
 }
 
-
 export class SharedTokenDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsUUID()
   instanceId: string;
 
-  @IsNumber()
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(168)
   expiresInHours?: number;
 
   @IsOptional()
+  @IsArray()
+  @IsIn(['view_qr'], { each: true })
   permissions?: string[];
 }

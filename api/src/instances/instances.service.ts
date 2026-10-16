@@ -1,243 +1,193 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
-import { BaileysService, InstanceSettings, InstanceSettingsUpdate } from './baileys.service';
-import { CreateInstanceDto, UpdateInstanceDto, UpdateSettingsDto } from './dto/instance.dto';
-import { TypebotService } from '../integrations/typebot.service';
-import { N8nService } from '../integrations/n8n.service';
-import { ChatwootService } from '../integrations/chatwoot.service';
-import * as QRCode from 'qrcode';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
+import * as QRCode from 'qrcode';
+import { assertSafeUrl } from '../common/utils/net';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import { InstanceSettingsService } from '../shared/instance-settings.service';
+import { PrismaService } from '../shared/prisma.service';
+import { InstanceSettings } from '../shared/settings.types';
+import { BaileysService } from './baileys.service';
+import { CreateInstanceDto, UpdateInstanceDto, UpdateSettingsDto } from './dto/instance.dto';
+
+const INSTANCE_SELECT = { id: true, name: true, status: true, apiKey: true, phone: true, createdAt: true, userId: true } as const;
+const MAX_INSTANCES_PER_USER = Number(process.env.MAX_INSTANCES_PER_USER || 50);
+
+export const generateApiKey = () => `goapikey_${crypto.randomBytes(24).toString('hex')}`;
+const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
 @Injectable()
 export class InstancesService {
   constructor(
-    private prisma: PrismaService,
-    private baileys: BaileysService,
-    @Inject(forwardRef(() => TypebotService))
-    private typebot: TypebotService,
-    @Inject(forwardRef(() => N8nService))
-    private n8n: N8nService,
-    @Inject(forwardRef(() => ChatwootService))
-    private chatwoot: ChatwootService,
+    private readonly prisma: PrismaService,
+    private readonly baileys: BaileysService,
+    private readonly settings: InstanceSettingsService,
   ) {}
 
-  async findAll(userId: string) {
+  async findAll(user: AuthUser) {
     const instances = await this.prisma.instance.findMany({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
+      select: INSTANCE_SELECT,
     });
-
-    return instances.map((i) => ({
-      ...i,
-      status: this.baileys.getStatus(i.id) || i.status,
-      phone: this.baileys.getPhone(i.id),
-      profilePic: this.baileys.getProfilePic(i.id),
-      profileName: this.baileys.getProfileName(i.id),
-      apiKey: i.apiKey,
-    }));
+    return instances.map((i) => this.present(i));
   }
 
-  async findOne(id: string, userId: string) {
-    const instance = await this.prisma.instance.findFirst({
-      where: { id, userId },
-    });
+  async findOne(id: string) {
+    const instance = await this.prisma.instance.findUnique({ where: { id }, select: INSTANCE_SELECT });
     if (!instance) throw new NotFoundException('Instância não encontrada');
-    return {
-      ...instance,
-      status: this.baileys.getStatus(id) || instance.status,
-      phone: this.baileys.getPhone(id),
-      profilePic: this.baileys.getProfilePic(id),
-      profileName: this.baileys.getProfileName(id),
-      apiKey: instance.apiKey,
-    };
+    return this.present(instance);
   }
 
-  async create(dto: CreateInstanceDto, userId: string) {
-    const apiKey = `goapikey_${crypto.randomBytes(24).toString('hex')}`;
-    return this.prisma.instance.create({
-      data: { name: dto.name, userId, apiKey },
+  async create(dto: CreateInstanceDto, user: AuthUser) {
+    const total = await this.prisma.instance.count({ where: { userId: user.id } });
+    if (total >= MAX_INSTANCES_PER_USER) {
+      throw new BadRequestException(`Limite de ${MAX_INSTANCES_PER_USER} instâncias atingido`);
+    }
+    const instance = await this.prisma.instance.create({
+      data: { name: dto.name.trim(), userId: user.id, apiKey: generateApiKey() },
+      select: INSTANCE_SELECT,
     });
+    return this.present(instance);
   }
 
-  async update(id: string, dto: UpdateInstanceDto, userId: string) {
-    await this.findOne(id, userId);
-    return this.prisma.instance.update({
+  async update(id: string, dto: UpdateInstanceDto) {
+    const instance = await this.prisma.instance.update({
       where: { id },
-      data: { name: dto.name },
+      data: { name: dto.name.trim() },
+      select: INSTANCE_SELECT,
     });
+    this.settings.rename(id, instance.name);
+    return this.present(instance);
   }
 
-  async delete(id: string, userId: string) {
-    await this.findOne(id, userId);
-    await this.baileys.deleteSession(id);
+  async rotateApiKey(id: string) {
+    const instance = await this.prisma.instance.update({
+      where: { id },
+      data: { apiKey: generateApiKey() },
+      select: { apiKey: true },
+    });
+    return { apiKey: instance.apiKey };
+  }
+
+  async delete(id: string) {
+    await this.baileys.remove(id);
     await this.prisma.instance.delete({ where: { id } });
+    this.settings.invalidate(id);
     return { message: 'Instância removida com sucesso' };
   }
 
-  async connect(id: string, userId: string) {
-    await this.findOne(id, userId);
-    const qr = await this.baileys.connect(id);
-    
-    // Registrar callbacks das integrações para esta instância
-    this.typebot.registerInstance(id);
-    this.n8n.registerInstance(id);
-    this.chatwoot.registerInstance(id);
-    
-    await this.prisma.instance.update({
-      where: { id },
-      data: { status: qr ? 'WAITING_QR' : 'CONNECTED' },
-    });
-
-    return { qr, status: qr ? 'WAITING_QR' : 'CONNECTED' };
+  async connect(id: string) {
+    const { status, qr } = await this.baileys.connect(id);
+    return { status, qr, qrCode: qr ? await QRCode.toDataURL(qr) : null };
   }
 
-  async disconnect(id: string, userId: string) {
-    await this.findOne(id, userId);
-    await this.baileys.disconnect(id);
-    
-    await this.prisma.instance.update({
-      where: { id },
-      data: { status: 'DISCONNECTED' },
-    });
+  async restart(id: string) {
+    const { status } = await this.baileys.restart(id);
+    return { message: 'Instância reiniciada', status };
+  }
 
+  async reconnect(id: string) {
+    const { status, qr } = await this.baileys.restart(id);
+    return { status, qr, qrCode: qr ? await QRCode.toDataURL(qr) : null };
+  }
+
+  async disconnect(id: string) {
+    await this.baileys.logout(id);
     return { message: 'Desconectado com sucesso' };
   }
 
-  async reconnect(id: string, userId: string) {
-    await this.findOne(id, userId);
-    const qr = await this.baileys.reconnect(id);
-    
-    // Registrar callbacks das integrações para esta instância
-    this.typebot.registerInstance(id);
-    this.n8n.registerInstance(id);
-    this.chatwoot.registerInstance(id);
-    
-    await this.prisma.instance.update({
-      where: { id },
-      data: { status: qr ? 'WAITING_QR' : 'CONNECTED' },
-    });
-
-    return { qr, status: qr ? 'WAITING_QR' : 'CONNECTED' };
-  }
-
-  // Reiniciar instância mantendo a sessão (sem precisar de QR)
-  async restart(id: string, userId: string) {
-    await this.findOne(id, userId);
-    await this.baileys.restart(id);
-    
-    // Registrar callbacks das integrações para esta instância
-    this.typebot.registerInstance(id);
-    this.n8n.registerInstance(id);
-    this.chatwoot.registerInstance(id);
-    
-    return { message: 'Instância reiniciada com sucesso' };
-  }
-
-  async getQR(id: string, userId: string) {
-    await this.findOne(id, userId);
+  async getQR(id: string) {
+    const info = this.baileys.getInfo(id);
+    if (info.status === 'CONNECTED') {
+      return { status: 'CONNECTED', qrCode: null, phone: info.phone, profilePic: info.profilePic, profileName: info.profileName };
+    }
     const qr = this.baileys.getQR(id);
-    const status = this.baileys.getStatus(id);
-    
-    if (status === 'CONNECTED') {
-      return { 
-        status: 'CONNECTED', 
-        qrCode: null,
-        phone: this.baileys.getPhone(id),
-        profilePic: this.baileys.getProfilePic(id),
-        profileName: this.baileys.getProfileName(id),
-      };
-    }
-    
-    if (!qr) {
-      return { status: 'WAITING', qrCode: null };
-    }
-
-    const qrCode = await QRCode.toDataURL(qr);
-    return { status: 'QR_READY', qrCode };
+    if (!qr) return { status: info.status === 'DISCONNECTED' ? 'DISCONNECTED' : 'WAITING', qrCode: null, reason: info.lastError };
+    return { status: 'QR_READY', qrCode: await QRCode.toDataURL(qr) };
   }
 
-  async getSettings(id: string, userId: string): Promise<InstanceSettings> {
-    await this.findOne(id, userId);
-    return this.baileys.getSettings(id);
+  getSettings(id: string): Promise<InstanceSettings> {
+    return this.settings.get(id);
   }
 
-  async updateSettings(id: string, dto: UpdateSettingsDto, userId: string): Promise<InstanceSettings> {
-    await this.findOne(id, userId);
-    return this.baileys.setSettings(id, dto);
+  async updateSettings(id: string, dto: UpdateSettingsDto) {
+    await this.validateOutboundUrls(dto);
+    const before = await this.settings.get(id);
+    const updated = await this.settings.update(id, dto as any);
+
+    const proxyChanged = JSON.stringify(before.proxy) !== JSON.stringify(updated.proxy);
+    const connected = this.baileys.getStatus(id) === 'CONNECTED';
+    await this.baileys.applySettings(id);
+    return { ...updated, restartRequired: proxyChanged && connected };
   }
 
-  // Shared Token Methods - Persistido no banco de dados
-  async createSharedToken(instanceId: string, userId: string, expiresInHours = 24, permissions = ['view_qr']) {
-    // Verificar se a instância pertence ao usuário
-    const instance = await this.prisma.instance.findFirst({
-      where: { id: instanceId, userId },
-    });
-    if (!instance) throw new NotFoundException('Instância não encontrada');
+  // ───────── Link público de QR Code ─────────
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
-
-    // Salvar no banco de dados
-    await this.prisma.sharedToken.create({
-      data: {
-        instanceId,
-        token,
-        permissions,
-        expiresAt,
-      },
-    });
-
+  async createSharedToken(instanceId: string, expiresInHours = 24, permissions = ['view_qr']) {
+    const token = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60_000);
+    await this.prisma.sharedToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    await this.prisma.sharedToken.create({ data: { instanceId, token: hashToken(token), permissions, expiresAt } });
     return { token, expiresAt };
   }
 
   async getSharedQR(token: string) {
-    // Buscar token no banco de dados
-    const tokenData = await this.prisma.sharedToken.findUnique({
-      where: { token },
-      include: { instance: true },
+    if (!token || token.length > 128) throw new BadRequestException('Link inválido ou expirado');
+    const shared = await this.prisma.sharedToken.findUnique({
+      where: { token: hashToken(token) },
+      include: { instance: { select: { id: true, name: true } } },
     });
-    
-    if (!tokenData) {
-      throw new BadRequestException('Token inválido ou expirado');
-    }
-    
-    if (new Date() > tokenData.expiresAt) {
-      // Deletar token expirado
-      await this.prisma.sharedToken.delete({ where: { id: tokenData.id } });
-      throw new BadRequestException('Token expirado');
+    if (!shared || shared.expiresAt < new Date() || !shared.permissions.includes('view_qr')) {
+      throw new BadRequestException('Link inválido ou expirado');
     }
 
-    const instance = tokenData.instance;
-    if (!instance) {
-      throw new NotFoundException('Instância não encontrada');
-    }
+    const { instance } = shared;
+    const info = this.baileys.getInfo(instance.id);
+    if (info.status === 'CONNECTED') return { status: 'CONNECTED', qrCode: null, instanceName: instance.name };
 
-    const qr = this.baileys.getQR(tokenData.instanceId);
-    const status = this.baileys.getStatus(tokenData.instanceId);
-
-    if (status === 'CONNECTED') {
-      return {
-        status: 'CONNECTED',
-        qrCode: null,
-        instanceName: instance.name,
-      };
-    }
-
-    if (!qr) {
-      // Tentar conectar se não estiver conectado
-      await this.baileys.connect(tokenData.instanceId);
-      return {
-        status: 'WAITING',
-        qrCode: null,
-        instanceName: instance.name,
-      };
-    }
-
-    const qrCode = await QRCode.toDataURL(qr);
+    // start() é idempotente: múltiplos acessos ao link não abrem conexões duplicadas.
+    if (info.status === 'DISCONNECTED') await this.baileys.start(instance.id);
+    const qr = this.baileys.getQR(instance.id);
     return {
-      status: 'QR_READY',
-      qrCode,
+      status: qr ? 'QR_READY' : 'WAITING',
+      qrCode: qr ? await QRCode.toDataURL(qr) : null,
       instanceName: instance.name,
+      expiresAt: shared.expiresAt,
     };
+  }
+
+  private present(instance: { id: string; name: string; status: string; apiKey: string | null; phone: string | null; createdAt: Date }) {
+    const live = this.baileys.getInfo(instance.id);
+    return {
+      id: instance.id,
+      name: instance.name,
+      apiKey: instance.apiKey,
+      createdAt: instance.createdAt,
+      status: live.status,
+      phone: live.phone ?? instance.phone,
+      profileName: live.profileName,
+      profilePic: live.profilePic,
+      lastError: live.lastError,
+    };
+  }
+
+  private async validateOutboundUrls(dto: UpdateSettingsDto) {
+    const checks: Array<[boolean | undefined, string | undefined, string]> = [
+      [dto.webhook?.enabled, dto.webhook?.url, 'URL do webhook'],
+      [dto.typebot?.enabled, dto.typebot?.apiUrl, 'URL do Typebot'],
+      [dto.n8n?.enabled, dto.n8n?.webhookUrl, 'URL do n8n'],
+      [dto.chatwoot?.enabled, dto.chatwoot?.url, 'URL do Chatwoot'],
+    ];
+    for (const [enabled, url, label] of checks) {
+      if (!enabled) continue;
+      if (!url) throw new BadRequestException(`${label} é obrigatória quando a integração está ativa`);
+      await assertSafeUrl(url, label);
+    }
+    if (dto.rabbitmq?.enabled && !/^amqps?:\/\//.test(dto.rabbitmq.uri ?? '')) {
+      throw new BadRequestException('URI do RabbitMQ deve começar com amqp:// ou amqps://');
+    }
+    if (dto.sqs?.enabled && !(dto.sqs.queueUrl && dto.sqs.region && dto.sqs.accessKeyId && dto.sqs.secretAccessKey)) {
+      throw new BadRequestException('SQS requer Access Key, Secret, Região e URL da fila');
+    }
   }
 }

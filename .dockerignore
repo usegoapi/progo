@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/.next
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/sessions
+.git
+.kiro
+.vscode
+img
+baileys/src
+baileys/wa-logs.txt
+baileys/*.md

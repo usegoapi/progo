@@ -1,0 +1,90 @@
+# =============================================================
+# GO-API · Stack completa (Postgres + API + Painel)
+# Uso:  cp .env.example .env  (preencha os segredos)  &&  docker compose up -d --build
+# =============================================================
+name: goapi
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-goapi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
+      POSTGRES_DB: ${POSTGRES_DB:-goapi}
+      # UTF-8 explícito: mensagens com emoji/acentos precisam ser gravadas sem perda.
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Sem porta publicada: o banco só é acessível pela rede interna do compose.
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: goapi/api:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-goapi}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-goapi}?schema=public
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:4000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env (openssl rand -hex 32)}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      APP_SECRET: ${APP_SECRET:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@goapi.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-false}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      BLOCK_PRIVATE_NETWORK: ${BLOCK_PRIVATE_NETWORK:-false}
+      WA_BROWSER_NAME: ${BRAND_NAME:-GO-API}
+      RESTORE_SESSIONS_ON_BOOT: ${RESTORE_SESSIONS_ON_BOOT:-true}
+      SEND_MIN_INTERVAL_MS: ${SEND_MIN_INTERVAL_MS:-900}
+      SEND_JITTER_MS: ${SEND_JITTER_MS:-600}
+      SEND_MAX_PER_MINUTE: ${SEND_MAX_PER_MINUTE:-40}
+      TYPING_SIMULATION: ${TYPING_SIMULATION:-true}
+      MEDIA_MAX_MB: ${MEDIA_MAX_MB:-32}
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+    ports:
+      - '${API_PORT:-4000}:3001'
+    volumes:
+      - sessions:/app/sessions
+    networks: [backend, frontend]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: goapi/panel:local
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # URL da API vista pelo navegador
+      API_URL: ${PUBLIC_API_URL:-http://localhost:4000}
+      BRAND_NAME: ${BRAND_NAME:-GO-API}
+      BRAND_LOGO_URL: ${BRAND_LOGO_URL:-/img/logosite.png}
+      BRAND_ICON_URL: ${BRAND_ICON_URL:-/img/icone.png}
+      BRAND_PRIMARY_COLOR: ${BRAND_PRIMARY_COLOR:-#eaa800}
+      BRAND_TAGLINE: ${BRAND_TAGLINE:-}
+      BRAND_SUPPORT_URL: ${BRAND_SUPPORT_URL:-}
+      BRAND_COPYRIGHT: ${BRAND_COPYRIGHT:-}
+    ports:
+      - '${PANEL_PORT:-3010}:3000'
+    networks: [frontend]
+
+volumes:
+  pgdata:
+  sessions:
+
+networks:
+  backend:
+  frontend:

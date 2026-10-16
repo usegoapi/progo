@@ -1,0 +1,47 @@
+name: 🐛 Reportar um problema
+description: Algo não está funcionando como deveria
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar! **Não inclua** API keys, tokens, senhas, números de telefone reais ou o conteúdo do seu `.env`.
+        Para falhas de segurança, use **Security › Report a vulnerability**.
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o problema e o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Criar instância
+        2. Enviar POST /api/send/...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: Saída de `docker compose logs api` (revise e remova dados sensíveis).
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Versão / commit
+      placeholder: ex. 2.0.0 ou hash do commit
+  - type: dropdown
+    id: install
+    attributes:
+      label: Como você instalou?
+      options:
+        - Docker Compose
+        - Easypanel / Coolify / outro painel
+        - Manual (Node.js)
+    validations:
+      required: true

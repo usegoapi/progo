@@ -1,30 +1,43 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { WebhooksService } from './webhooks.service';
+import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
+import { WA_EVENTS } from '../shared/event-bus.service';
 import { CreateWebhookDto, UpdateWebhookDto } from './dto/webhook.dto';
+import { WebhooksService } from './webhooks.service';
 
 @Controller('webhooks')
 @UseGuards(JwtAuthGuard)
 export class WebhooksController {
-  constructor(private webhooksService: WebhooksService) {}
+  constructor(private readonly webhooks: WebhooksService) {}
+
+  @Get('events')
+  events() {
+    return { events: WA_EVENTS };
+  }
 
   @Get()
-  findAll(@Request() req) {
-    return this.webhooksService.findAll(req.user.id);
+  findAll(@CurrentUser() user: AuthUser) {
+    return this.webhooks.findAll(user.id);
   }
 
   @Post()
-  create(@Body() dto: CreateWebhookDto, @Request() req) {
-    return this.webhooksService.create(dto, req.user.id);
+  create(@Body() dto: CreateWebhookDto, @CurrentUser() user: AuthUser) {
+    return this.webhooks.create(dto, user.id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateWebhookDto, @Request() req) {
-    return this.webhooksService.update(id, dto, req.user.id);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateWebhookDto, @CurrentUser() user: AuthUser) {
+    return this.webhooks.update(id, dto, user.id);
+  }
+
+  @Post(':id/test')
+  @HttpCode(200)
+  test(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.webhooks.test(id, user.id);
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string, @Request() req) {
-    return this.webhooksService.delete(id, req.user.id);
+  delete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.webhooks.delete(id, user.id);
   }
 }

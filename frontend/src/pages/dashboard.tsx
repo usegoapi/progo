@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
+import { Copyright } from '@/lib/branding';
+
 
 interface Instance {
   id: string;
@@ -22,14 +24,14 @@ export default function Dashboard() {
   const [apiStatus, setApiStatus] = useState<'loading' | 'online' | 'offline'>('loading');
 
   useEffect(() => {
-    api.get('/instances')
-      .then(({ data }) => {
-        const instances = Array.isArray(data) ? data : [];
+    Promise.all([api.get('/instances'), api.get('/messages/stats').catch(() => ({ data: { today: 0 } }))])
+      .then(([instancesRes, statsRes]) => {
+        const instances = Array.isArray(instancesRes.data) ? instancesRes.data : [];
         const connected = instances.filter((i: Instance) => i.status === 'CONNECTED');
         setStats({
           instances: instances.length,
           connected: connected.length,
-          messages: 0,
+          messages: statsRes.data?.today ?? 0,
         });
         setConnectedInstances(connected);
         setApiStatus('online');
@@ -149,7 +151,7 @@ export default function Dashboard() {
 
       {/* Footer */}
       <div className="mt-12 border-t border-border-dark/50 pt-6 text-center">
-        <p className="text-sm text-slate-600">© 2025 GO-API todos direitos reservados.</p>
+        <Copyright />
       </div>
     </Layout>
   );

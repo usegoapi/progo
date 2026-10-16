@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import Swal from 'sweetalert2';
+import { Copyright } from '@/lib/branding';
+
 
 interface Instance { id: string; name: string; status: string; }
 interface Group { id: string; name: string; participants: number; }
@@ -219,7 +221,7 @@ export default function Contacts() {
       )}
 
       <div className="mt-12 border-t border-border-dark/50 pt-6 text-center">
-        <p className="text-sm text-slate-600">© 2025 GO-API todos direitos reservados.</p>
+        <Copyright />
       </div>
     </Layout>
   );

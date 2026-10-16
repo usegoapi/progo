@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -8,12 +9,16 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  role      String   @default("user")
-  createdAt DateTime @default(now())
-  
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  name         String?
+  role         String   @default("user")
+  // Incrementado ao trocar a senha: invalida todos os JWTs emitidos antes.
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
   instances    Instance[]
   webhooks     Webhook[]
   integrations Integration[]
@@ -25,36 +30,53 @@ model Instance {
   name        String
   status      String   @default("DISCONNECTED")
   apiKey      String?  @unique
+  phone       String?
+  // Configurações da instância (comportamento, proxy, eventos e integrações).
+  settings    Json?
+  // Legado: não é mais utilizado, mantido para não perder dados em upgrades.
   sessionData Json?
   createdAt   DateTime @default(now())
-  
+  updatedAt   DateTime @default(now()) @updatedAt
+
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages     Message[]
   sharedTokens SharedToken[]
+
+  @@index([userId])
 }
 
 model Message {
   id         String   @id @default(uuid())
   instanceId String
+  messageId  String?
   from       String
   to         String
   type       String
   content    Json
   status     String   @default("PENDING")
   createdAt  DateTime @default(now())
-  
+
   instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
+  @@index([messageId])
 }
 
 model Webhook {
-  id        String   @id @default(uuid())
-  userId    String
-  url       String
-  events    String[]
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  
+  id         String   @id @default(uuid())
+  userId     String
+  url        String
+  events     String[]
+  // Segredo usado para assinar o payload (HMAC-SHA256 no header X-Signature).
+  secret     String?
+  // Opcional: restringe o webhook a uma instância.
+  instanceId String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Integration {
@@ -64,17 +86,22 @@ model Integration {
   config    Json
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
 }
 
 model SharedToken {
   id          String   @id @default(uuid())
   instanceId  String
+  // SHA-256 do token. O token em claro só existe no link compartilhado.
   token       String   @unique
   permissions String[]
   expiresAt   DateTime
   createdAt   DateTime @default(now())
-  
+
   instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }

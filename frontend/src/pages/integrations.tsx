@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import Swal from 'sweetalert2';
+import { Copyright, brandColor } from '@/lib/branding';
+
 
 interface Integration {
   id: string;
@@ -167,7 +169,7 @@ export default function Integrations() {
         title: 'Sucesso!',
         text: data.message || 'Configuração salva com sucesso!',
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#22c55e',
@@ -186,7 +188,7 @@ export default function Integrations() {
         title: 'Erro na Configuração',
         text: errorMessage,
         confirmButtonText: 'Entendi',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#ef4444',
@@ -206,7 +208,7 @@ export default function Integrations() {
         title: 'Campos Obrigatórios',
         text: 'Preencha URL, Account ID e Token para testar a conexão',
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#f59e0b',
@@ -237,7 +239,7 @@ export default function Integrations() {
           ` : ''}
         `,
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#22c55e',
@@ -255,7 +257,7 @@ export default function Integrations() {
         title: 'Falha na Conexão',
         text: errorMessage,
         confirmButtonText: 'Entendi',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#ef4444',
@@ -275,7 +277,7 @@ export default function Integrations() {
         title: 'Campos Obrigatórios',
         text: 'Preencha API URL e Public Name para testar a conexão',
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#f59e0b',
@@ -307,7 +309,7 @@ export default function Integrations() {
           ` : ''}
         `,
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#22c55e',
@@ -325,7 +327,7 @@ export default function Integrations() {
         title: 'Falha na Conexão',
         text: errorMessage,
         confirmButtonText: 'Entendi',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#ef4444',
@@ -345,7 +347,7 @@ export default function Integrations() {
         title: 'Campo Obrigatório',
         text: 'Preencha a Webhook URL para testar a conexão',
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#f59e0b',
@@ -375,7 +377,7 @@ export default function Integrations() {
           ` : ''}
         `,
         confirmButtonText: 'OK',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#22c55e',
@@ -393,7 +395,7 @@ export default function Integrations() {
         title: 'Falha na Conexão',
         text: errorMessage,
         confirmButtonText: 'Entendi',
-        confirmButtonColor: '#d4a843',
+        confirmButtonColor: brandColor(),
         background: '#1a1a1a',
         color: '#fff',
         iconColor: '#ef4444',
@@ -421,7 +423,7 @@ export default function Integrations() {
     <Layout>
       <div className="mb-10">
         <h2 className="text-4xl font-black tracking-tight text-white mb-2">Integrações</h2>
-        <p className="text-slate-400 text-lg font-light">Configure suas integrações com plataformas externas.</p>
+        <p className="text-slate-400 text-lg font-light">Configuração padrão para todas as instâncias. Uma instância com a integração ativa nas próprias configurações usa a dela.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -532,7 +534,7 @@ export default function Integrations() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => saveIntegration('typebot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
+                <button onClick={() => saveIntegration('typebot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-lg transition-all disabled:opacity-50">
                   {loading ? 'Salvando...' : 'Salvar Configuração'}
                 </button>
                 <button onClick={testTypebotConnection} disabled={loading} className="px-6 py-3 bg-surface-light hover:bg-[#3a3a3a] text-white font-bold rounded-lg transition-all disabled:opacity-50 border border-border-dark">
@@ -639,7 +641,7 @@ export default function Integrations() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => saveIntegration('n8n')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
+                <button onClick={() => saveIntegration('n8n')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-lg transition-all disabled:opacity-50">
                   {loading ? 'Salvando...' : 'Salvar Configuração'}
                 </button>
                 <button onClick={testN8nConnection} disabled={loading} className="px-6 py-3 bg-surface-light hover:bg-[#3a3a3a] text-white font-bold rounded-lg transition-all disabled:opacity-50 border border-border-dark">
@@ -717,7 +719,7 @@ export default function Integrations() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => saveIntegration('chatwoot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-lg transition-all disabled:opacity-50">
+                <button onClick={() => saveIntegration('chatwoot')} disabled={loading} className="px-6 py-3 bg-primary hover:bg-primary-hover text-on-primary font-bold rounded-lg transition-all disabled:opacity-50">
                   {loading ? 'Salvando...' : 'Salvar Configuração'}
                 </button>
                 <button onClick={testChatwootConnection} disabled={loading} className="px-6 py-3 bg-surface-light hover:bg-[#3a3a3a] text-white font-bold rounded-lg transition-all disabled:opacity-50 border border-border-dark">
@@ -731,7 +733,7 @@ export default function Integrations() {
 
       {/* Footer */}
       <div className="mt-12 border-t border-border-dark/50 pt-6 text-center">
-        <p className="text-sm text-slate-600">© 2025 GO-API todos direitos reservados.</p>
+        <Copyright />
       </div>
     </Layout>
   );
