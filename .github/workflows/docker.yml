@@ -1,0 +1,120 @@
+name: Docker images
+
+# Publica as imagens da API e do painel no GitHub Container Registry (ghcr.io)
+# e, se os secrets DOCKERHUB_USERNAME/DOCKERHUB_TOKEN existirem, também no Docker Hub.
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+    paths:
+      - 'api/**'
+      - 'frontend/**'
+      - 'baileys/**'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: goapi-api
+            dockerfile: api/Dockerfile
+            title: GO-API · API
+            description: API de WhatsApp open source (NestJS + Baileys)
+          - image: goapi-panel
+            dockerfile: frontend/Dockerfile
+            title: GO-API · Painel
+            description: Painel whitelabel do GO-API (Next.js)
+    env:
+      HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login no Docker Hub (opcional)
+        if: env.HAS_DOCKERHUB == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Registries de destino
+        id: images
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          {
+            echo 'list<<EOF'
+            echo "ghcr.io/${owner}/${{ matrix.image }}"
+            if [ "${HAS_DOCKERHUB}" = "true" ]; then echo "docker.io/${DOCKERHUB_USERNAME}/${{ matrix.image }}"; fi
+            echo 'EOF'
+            echo "ghcr=ghcr.io/${owner}/${{ matrix.image }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Nomes e tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.images.outputs.list }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            org.opencontainers.image.description=${{ matrix.description }}
+
+      - name: Build e push (amd64 + arm64)
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: true
+          sbom: true
+
+      - name: Atestado de origem (supply chain)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.images.outputs.ghcr }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

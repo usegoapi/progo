@@ -86,8 +86,8 @@ ADMIN_PASSWORD=uma-senha-forte
 ```
 
 ```bash
-# 3. Suba tudo
-docker compose up -d --build
+# 3. Suba tudo (baixa as imagens prontas, sem compilar)
+docker compose up -d
 
 # 4. Acompanhe a inicialização
 docker compose logs -f api
@@ -102,6 +102,21 @@ Pronto:
 | ❤️ Saúde | `http://SEU_SERVIDOR:4000/health` |
 
 > 💡 Se `ADMIN_PASSWORD` ficar vazio, uma senha aleatória é gerada e aparece **uma única vez** no log da API (`docker compose logs api`).
+
+### Imagens Docker
+
+As imagens são publicadas automaticamente a cada versão, para **amd64** e **arm64**, com SBOM e atestado de origem:
+
+| Imagem | Pull |
+|---|---|
+| [API](https://github.com/usegoapi/progo/pkgs/container/goapi-api) | `docker pull ghcr.io/usegoapi/goapi-api:latest` |
+| [Painel](https://github.com/usegoapi/progo/pkgs/container/goapi-panel) | `docker pull ghcr.io/usegoapi/goapi-panel:latest` |
+
+Para fixar uma versão, defina `GOAPI_VERSION` no `.env` (ex: `2.0.0`). Para compilar a partir do código:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
 
 ### Colocando em produção (domínio + HTTPS)
 
@@ -138,7 +153,8 @@ api.suaempresa.com {
 
 ```bash
 git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 O schema do banco é sincronizado automaticamente na inicialização. As sessões do WhatsApp ficam no volume `sessions` e **não se perdem** em atualizações.

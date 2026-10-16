@@ -1,0 +1,16 @@
+# =============================================================
+# Build local a partir do código-fonte (para quem modifica o projeto).
+# Uso: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# =============================================================
+services:
+  api:
+    image: goapi/api:local
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+
+  frontend:
+    image: goapi/panel:local
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile

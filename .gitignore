@@ -7,3 +7,6 @@
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# Loja (projeto privado separado): nunca publicar neste repositório
+usego/

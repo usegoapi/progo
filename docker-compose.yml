@@ -1,6 +1,7 @@
 # =============================================================
 # GO-API · Stack completa (Postgres + API + Painel)
-# Uso:  cp .env.example .env  (preencha os segredos)  &&  docker compose up -d --build
+# Uso:  cp .env.example .env  (preencha os segredos)  &&  docker compose up -d
+# Build a partir do código:  docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 # =============================================================
 name: goapi
 
@@ -25,10 +26,7 @@ services:
     networks: [backend]
 
   api:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
-    image: goapi/api:local
+    image: ghcr.io/usegoapi/goapi-api:${GOAPI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -60,10 +58,7 @@ services:
     networks: [backend, frontend]
 
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    image: goapi/panel:local
+    image: ghcr.io/usegoapi/goapi-panel:${GOAPI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - api
